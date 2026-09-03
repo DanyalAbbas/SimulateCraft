@@ -58,8 +58,8 @@ dev = [
 simulatecraft = "simulatecraft.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/DanyalAbbas/SimulateAI"
-Documentation = "https://danyalabbas.github.io/SimulateAI/"
+Homepage = "https://github.com/DanyalAbbas/SimulateCraft"
+Documentation = "https://danyalabbas.github.io/SimulateCraft/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/simulatecraft"]

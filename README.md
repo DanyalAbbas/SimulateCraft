@@ -337,7 +337,7 @@ DISABLE_MKDOCS_2_WARNING=true uv run mkdocs build   # writes ./site
 Guide pages live in `docs/`; the `reference/` tree is produced by
 `docs/gen_ref_pages.py` via `mkdocs-gen-files`.
 
-Published docs (from `main`): [https://danyalabbas.github.io/SimulateAI/](https://danyalabbas.github.io/SimulateAI/)
+Published docs (from `main`): [https://danyalabbas.github.io/SimulateCraft/](https://danyalabbas.github.io/SimulateCraft/)
 
 ### CI / CD
 
@@ -351,7 +351,7 @@ One-time GitHub setup for public docs:
 
 1. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**
 2. Merge/push to `main` so **Deploy docs** can run
-3. Open [https://danyalabbas.github.io/SimulateAI/](https://danyalabbas.github.io/SimulateAI/)
+3. Open [https://danyalabbas.github.io/SimulateCraft/](https://danyalabbas.github.io/SimulateCraft/)
 
 Use `staging` for integration; promote to `main` when ready to publish.
 
