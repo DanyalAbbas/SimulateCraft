@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SimulateCraft</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="brand-text">
+        <h1>SimulateCraft</h1>
+        <p class="tagline">Live agent map</p>
+      </div>
+    </div>
+
+    <div class="run-meta">
+      <div id="status" class="status connecting" data-state="connecting">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="status-label">connecting</span>
+      </div>
+      <div id="tick-counter" class="tick" title="Simulation tick">t=0</div>
+    </div>
+
+    <div class="controls" role="group" aria-label="Simulation controls">
+      <button type="button" id="btn-play" class="btn btn-primary" title="Resume (Space)">Play</button>
+      <button type="button" id="btn-pause" class="btn" title="Pause (Space)">Pause</button>
+      <button type="button" id="btn-step" class="btn" title="Step one tick (.)">Step</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="map-stage" aria-label="World map">
+      <div class="map-frame">
+        <div class="map-frame-inner">
+          <canvas id="world" width="512" height="512" aria-label="Minecraft map"></canvas>
+          <div id="map-overlay" class="map-overlay" hidden>Waiting for map data…</div>
+        </div>
+        <p class="map-caption">128×128 block map · vanilla colors · walk to reveal</p>
+      </div>
+
+      <section class="roster" aria-label="Agents">
+        <div class="section-head">
+          <h2>Agents</h2>
+          <span id="agent-count" class="count">0</span>
+        </div>
+        <div id="hud" class="roster-list">
+          <p class="empty">No agents connected yet.</p>
+        </div>
+      </section>
+    </section>
+
+    <aside class="rail" aria-label="Events and chat">
+      <div class="rail-head">
+        <h2>Event feed</h2>
+        <div class="filters" role="tablist" aria-label="Filter events">
+          <button type="button" class="filter is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+          <button type="button" class="filter" data-filter="action" role="tab" aria-selected="false">Acts</button>
+          <button type="button" class="filter" data-filter="chat" role="tab" aria-selected="false">Chat</button>
+          <button type="button" class="filter" data-filter="system" role="tab" aria-selected="false">System</button>
+        </div>
+      </div>
+
+      <div id="event-log" class="event-log" role="log" aria-live="polite"></div>
+
+      <form id="chat-form" class="composer">
+        <label class="sr-only" for="chat-target">Target agent</label>
+        <select id="chat-target" title="Message target">
+          <option value="">Everyone</option>
+        </select>
+        <label class="sr-only" for="chat-input">Message</label>
+        <input id="chat-input" type="text" placeholder="Message an agent…" autocomplete="off" maxlength="256" />
+        <button type="submit" class="btn btn-primary">Send</button>
+      </form>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

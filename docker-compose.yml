@@ -1,0 +1,15 @@
+services:
+  minecraft:
+    image: itzg/minecraft-server:java21
+    container_name: simulatecraft-mc
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      VERSION: "1.21.4"
+      ONLINE_MODE: "FALSE"
+      MEMORY: "2G"
+      TYPE: VANILLA
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
