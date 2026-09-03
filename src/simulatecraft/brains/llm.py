@@ -391,9 +391,7 @@ def _decision_prompt(deps: BrainDeps) -> str:
         parts.append(f"Relevant memories:\n{mem}")
     if deps.inbox:
         inbox = "\n".join(f"- {m}" for m in deps.inbox)
-        parts.append(
-            f"Pending messages (you MUST reply with kind=chat this tick):\n{inbox}"
-        )
+        parts.append(f"Pending messages (you MUST reply with kind=chat this tick):\n{inbox}")
     parts.append(f"Current observation:\n{deps.observation_text}")
     parts.append("Choose your next action.")
     return "\n\n".join(parts)
