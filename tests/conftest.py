@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from simulatecraft.core import EventBus
-
 from helpers import RunnerFactory
+from simulatecraft.core import EventBus
 
 
 @pytest.fixture()

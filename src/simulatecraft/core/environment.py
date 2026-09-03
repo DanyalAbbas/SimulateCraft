@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable
 from typing import Any
 
 from pydantic import BaseModel
@@ -47,16 +48,17 @@ class Environment(ABC):
         self._registered.discard(agent_id)
 
     @abstractmethod
-    def observe(self, agent_id: str) -> Observation:
+    def observe(self, agent_id: str) -> Observation | Awaitable[Observation]:
         """Return the state visible to ``agent_id`` (may be partial)."""
 
     @abstractmethod
-    def step(self, agent_id: str, action: Action) -> StepResult:
+    def step(self, agent_id: str, action: Action) -> StepResult | Awaitable[StepResult]:
         """Apply ``action`` for ``agent_id``, mutating environment state."""
 
-    def tick(self) -> None:
+    def tick(self) -> None | Awaitable[None]:
         """Advance environment-owned dynamics once per simulation tick."""
         self._tick_count += 1
+        return None
 
     def reset(self, seed: int | None = None) -> None:
         """Reset to the initial episode state. Subclasses should override."""

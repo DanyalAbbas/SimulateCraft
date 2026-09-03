@@ -17,13 +17,14 @@ from pydantic import BaseModel, Field
 
 from ..core.schemas import Observation
 
-
 # ---------------------------------------------------------------------------
 # Sub-models (nested inside MinecraftObservation)
 # ---------------------------------------------------------------------------
 
+
 class Vec3(BaseModel):
     """3-D float coordinate."""
+
     x: float = 0.0
     y: float = 0.0
     z: float = 0.0
@@ -34,6 +35,7 @@ class Vec3(BaseModel):
 
 class InventoryItem(BaseModel):
     """One stack in the bot's inventory."""
+
     name: str
     count: int
     slot: int = -1
@@ -42,6 +44,7 @@ class InventoryItem(BaseModel):
 
 class NearbyBlock(BaseModel):
     """A block within the scan radius."""
+
     name: str
     x: int
     y: int
@@ -51,8 +54,9 @@ class NearbyBlock(BaseModel):
 
 class NearbyEntity(BaseModel):
     """A mob or player the bot can see."""
-    name: str              # entity type e.g. "creeper", or player username
-    entity_type: str       # "mob", "player", "item", "other"
+
+    name: str  # entity type e.g. "creeper", or player username
+    entity_type: str  # "mob", "player", "item", "other"
     x: float
     y: float
     z: float
@@ -62,25 +66,28 @@ class NearbyEntity(BaseModel):
 
 class ChatMessage(BaseModel):
     """One line from the Minecraft chat log."""
-    sender: str            # username or "" for server messages
+
+    sender: str  # username or "" for server messages
     text: str
     tick: int = -1
 
 
 class BotStats(BaseModel):
     """Vital statistics of the bot."""
+
     health: float = 20.0
     food: float = 20.0
     saturation: float = 5.0
     experience_level: int = 0
     game_mode: str = "survival"
     is_raining: bool = False
-    time_of_day: int = 0      # 0-24000, 6000=noon, 18000=midnight
+    time_of_day: int = 0  # 0-24000, 6000=noon, 18000=midnight
     biome: str = "unknown"
 
 
 class RecipeInfo(BaseModel):
     """A craftable item the bot currently has materials for."""
+
     item_name: str
     count: int = 1
     needs_table: bool = False
@@ -89,6 +96,7 @@ class RecipeInfo(BaseModel):
 # ---------------------------------------------------------------------------
 # Main observation
 # ---------------------------------------------------------------------------
+
 
 class MinecraftObservation(Observation):
     """Full structured state snapshot handed to the agent brain each tick.
@@ -99,8 +107,8 @@ class MinecraftObservation(Observation):
 
     # ---- position & orientation ----
     position: Vec3 = Field(default_factory=Vec3)
-    yaw: float = 0.0          # horizontal look angle in degrees
-    pitch: float = 0.0        # vertical look angle in degrees
+    yaw: float = 0.0  # horizontal look angle in degrees
+    pitch: float = 0.0  # vertical look angle in degrees
     on_ground: bool = True
     biome: str = "unknown"
 
@@ -116,7 +124,7 @@ class MinecraftObservation(Observation):
 
     # ---- inventory ----
     inventory: list[InventoryItem] = Field(default_factory=list)
-    equipped_item: str | None = None   # name of item in main hand
+    equipped_item: str | None = None  # name of item in main hand
 
     # ---- craftable right now ----
     craftable: list[RecipeInfo] = Field(default_factory=list)
@@ -140,9 +148,7 @@ class MinecraftObservation(Observation):
             lines.append(f"Holding: {self.equipped_item}")
 
         if self.inventory:
-            inv_summary = ", ".join(
-                f"{item.count}x {item.name}" for item in self.inventory[:12]
-            )
+            inv_summary = ", ".join(f"{item.count}x {item.name}" for item in self.inventory[:12])
             if len(self.inventory) > 12:
                 inv_summary += f" ... (+{len(self.inventory) - 12} more)"
             lines.append(f"Inventory: {inv_summary}")

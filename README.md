@@ -337,6 +337,24 @@ DISABLE_MKDOCS_2_WARNING=true uv run mkdocs build   # writes ./site
 Guide pages live in `docs/`; the `reference/` tree is produced by
 `docs/gen_ref_pages.py` via `mkdocs-gen-files`.
 
+Published docs (from `main`): [https://danyalabbas.github.io/SimulateAI/](https://danyalabbas.github.io/SimulateAI/)
+
+### CI / CD
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| **CI** | push/PR → `main`, `staging` | Ruff, pytest (3.11–3.13), mypy, MkDocs build |
+| **Deploy docs** | push → `main` | Builds docs and deploys to **GitHub Pages** |
+| **Staging** | push → `staging` | Full validate + uploads a docs site artifact (14 days) |
+
+One-time GitHub setup for public docs:
+
+1. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**
+2. Merge/push to `main` so **Deploy docs** can run
+3. Open [https://danyalabbas.github.io/SimulateAI/](https://danyalabbas.github.io/SimulateAI/)
+
+Use `staging` for integration; promote to `main` when ready to publish.
+
 ---
 
 ## License

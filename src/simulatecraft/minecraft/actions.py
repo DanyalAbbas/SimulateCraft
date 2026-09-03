@@ -26,8 +26,10 @@ from ..core.schemas import Action
 # Movement
 # ---------------------------------------------------------------------------
 
+
 class Move(Action):
     """Walk one step in a cardinal direction."""
+
     kind: Literal["move"] = "move"
     direction: Literal["forward", "back", "left", "right"] = "forward"
     sprint: bool = False
@@ -39,6 +41,7 @@ class Move(Action):
 
 class Jump(Action):
     """Jump (optionally while moving)."""
+
     kind: Literal["jump"] = "jump"
 
     def render(self) -> str:
@@ -47,6 +50,7 @@ class Jump(Action):
 
 class Sneak(Action):
     """Toggle sneaking on or off."""
+
     kind: Literal["sneak"] = "sneak"
     enable: bool = True
 
@@ -56,12 +60,13 @@ class Sneak(Action):
 
 class LookAt(Action):
     """Turn to face a target — block coordinates or entity name."""
+
     kind: Literal["look_at"] = "look_at"
     # Either block coords OR an entity name (resolved on bot side)
     x: float | None = None
     y: float | None = None
     z: float | None = None
-    entity: str | None = None   # e.g. "creeper", "Steve"
+    entity: str | None = None  # e.g. "creeper", "Steve"
 
     def render(self) -> str:
         if self.entity:
@@ -73,13 +78,15 @@ class LookAt(Action):
 # World interaction
 # ---------------------------------------------------------------------------
 
+
 class MineBlock(Action):
     """Dig/break a block at a given position (or the block the bot is looking at)."""
+
     kind: Literal["mine_block"] = "mine_block"
     x: int | None = None
     y: int | None = None
     z: int | None = None
-    block_name: str | None = None   # resolve nearest matching block when coords absent
+    block_name: str | None = None  # resolve nearest matching block when coords absent
 
     def render(self) -> str:
         if self.block_name and self.x is None:
@@ -89,6 +96,7 @@ class MineBlock(Action):
 
 class PlaceBlock(Action):
     """Place a block from inventory at a given position."""
+
     kind: Literal["place_block"] = "place_block"
     block_name: str
     x: int
@@ -102,6 +110,7 @@ class PlaceBlock(Action):
 
 class UseItem(Action):
     """Right-click / use the currently equipped item (optionally on a target block)."""
+
     kind: Literal["use_item"] = "use_item"
     x: int | None = None
     y: int | None = None
@@ -115,6 +124,7 @@ class UseItem(Action):
 
 class ActivateBlock(Action):
     """Right-click a block to open/use it (chest, furnace, door, lever, etc.)."""
+
     kind: Literal["activate_block"] = "activate_block"
     x: int
     y: int
@@ -128,8 +138,10 @@ class ActivateBlock(Action):
 # Inventory
 # ---------------------------------------------------------------------------
 
+
 class EquipItem(Action):
     """Move an item to the bot's hand or armour slot."""
+
     kind: Literal["equip"] = "equip"
     item_name: str
     destination: Literal["hand", "head", "torso", "legs", "feet", "off-hand"] = "hand"
@@ -140,6 +152,7 @@ class EquipItem(Action):
 
 class DropItem(Action):
     """Drop one or more of an item from inventory."""
+
     kind: Literal["drop_item"] = "drop_item"
     item_name: str
     count: int = 1
@@ -150,6 +163,7 @@ class DropItem(Action):
 
 class Craft(Action):
     """Craft an item by name (recipe looked up on the bot side)."""
+
     kind: Literal["craft"] = "craft"
     item_name: str
     count: int = 1
@@ -164,8 +178,10 @@ class Craft(Action):
 # Social
 # ---------------------------------------------------------------------------
 
+
 class Chat(Action):
     """Send a public message in Minecraft chat."""
+
     kind: Literal["chat"] = "chat"
     text: str
 
@@ -175,6 +191,7 @@ class Chat(Action):
 
 class Whisper(Action):
     """Send a private /msg to another player."""
+
     kind: Literal["whisper"] = "whisper"
     target: str
     text: str
@@ -187,8 +204,10 @@ class Whisper(Action):
 # Navigation
 # ---------------------------------------------------------------------------
 
+
 class NavigateTo(Action):
     """High-level pathfind to a position. Mineflayer pathfinder handles obstacles."""
+
     kind: Literal["navigate_to"] = "navigate_to"
     x: float
     y: float
@@ -201,8 +220,9 @@ class NavigateTo(Action):
 
 class FollowEntity(Action):
     """Follow a named player or mob until the next action."""
+
     kind: Literal["follow"] = "follow"
-    target: str          # player username or mob type
+    target: str  # player username or mob type
     min_distance: float = 2.0
     timeout_seconds: float = 8.0
 
@@ -214,8 +234,10 @@ class FollowEntity(Action):
 # Meta
 # ---------------------------------------------------------------------------
 
+
 class Wait(Action):
     """Do nothing for a number of ticks. Useful when waiting for events."""
+
     kind: Literal["wait"] = "wait"
     ticks: int = 1
 
@@ -249,10 +271,20 @@ MinecraftAction = Annotated[
 
 # Flat list for passing to LLMBrain(action_types=...)
 ALL_ACTIONS: list[type[Action]] = [
-    Move, Jump, Sneak, LookAt,
-    MineBlock, PlaceBlock, UseItem, ActivateBlock,
-    EquipItem, DropItem, Craft,
-    Chat, Whisper,
-    NavigateTo, FollowEntity,
+    Move,
+    Jump,
+    Sneak,
+    LookAt,
+    MineBlock,
+    PlaceBlock,
+    UseItem,
+    ActivateBlock,
+    EquipItem,
+    DropItem,
+    Craft,
+    Chat,
+    Whisper,
+    NavigateTo,
+    FollowEntity,
     Wait,
 ]

@@ -86,16 +86,17 @@ def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
             print("Minecraft is up.")
             return
         time.sleep(2)
-    sys.exit(
-        f"Minecraft did not open {host}:{port} in time.\n"
-        "Check: docker compose logs -f"
-    )
+    sys.exit(f"Minecraft did not open {host}:{port} in time.\nCheck: docker compose logs -f")
 
 
 def require_llm_key() -> None:
     load_dotenv(REPO_ROOT / ".env")
     load_dotenv()
-    if os.getenv("GROQ_API_KEY") or os.getenv("OPENROUTER_API_KEY") or os.getenv("SIMULATECRAFT_MODEL"):
+    if (
+        os.getenv("GROQ_API_KEY")
+        or os.getenv("OPENROUTER_API_KEY")
+        or os.getenv("SIMULATECRAFT_MODEL")
+    ):
         return
     sys.exit(
         "No LLM key found.\n\n"
@@ -108,9 +109,10 @@ def require_llm_key() -> None:
 
 
 def launch_example(args: argparse.Namespace) -> None:
+    import asyncio
+
     from simulatecraft.brains.llm import resolve_model
     from simulatecraft.examples.minecraft_explorer.main import run_with_server
-    import asyncio
 
     model = args.model or resolve_model()
     print(f"Starting agents  [model: {model}]")

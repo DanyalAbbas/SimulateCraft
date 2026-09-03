@@ -45,6 +45,7 @@ log = logging.getLogger(__name__)
 
 class AgentBotConfig:
     """Per-agent bot connection settings."""
+
     def __init__(
         self,
         username: str,
@@ -165,6 +166,7 @@ class MinecraftEnvironment(Environment):
             connect_timeout=self.connect_timeout,
             request_timeout=self.request_timeout,
         )
+
         # Subscribe to chat events and append to rolling log
         def _on_chat(data: dict[str, Any]) -> None:
             msg = ChatMessage(
@@ -187,7 +189,7 @@ class MinecraftEnvironment(Environment):
         await asyncio.gather(*(b.close() for b in self._bridges.values()))
         self._bridges.clear()
 
-    async def __aenter__(self) -> "MinecraftEnvironment":
+    async def __aenter__(self) -> MinecraftEnvironment:
         await self.connect()
         return self
 
@@ -362,6 +364,7 @@ class MinecraftEnvironment(Environment):
 # State parsing helper
 # ---------------------------------------------------------------------------
 
+
 def _parse_state(
     raw: dict[str, Any],
     agent_id: str,
@@ -414,6 +417,7 @@ def _parse_state(
     ]
 
     from .observations import RecipeInfo
+
     craftable = [
         RecipeInfo(
             item_name=r["item_name"],

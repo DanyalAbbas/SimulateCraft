@@ -37,7 +37,7 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 _DEFAULT_BOT_SCRIPT = Path(__file__).parent / "bot" / "bot.js"
-_DEFAULT_IPC_PORT = 25570   # local TCP port for Python↔Node JSON RPC
+_DEFAULT_IPC_PORT = 25570  # local TCP port for Python↔Node JSON RPC
 
 
 class BridgeError(Exception):
@@ -74,12 +74,12 @@ class MinecraftBridge:
         self.request_timeout = request_timeout
         self.auth = auth
 
-        self._process: subprocess.Popen | None = None  # type: ignore[type-arg]
+        self._process: subprocess.Popen | None = None
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._pending: dict[str, asyncio.Future[Any]] = {}
         self._event_handlers: dict[str, list[Any]] = {}
-        self._read_task: asyncio.Task | None = None  # type: ignore[type-arg]
+        self._read_task: asyncio.Task | None = None
         self._connected = False
 
     # ------------------------------------------------------------------
@@ -101,11 +101,16 @@ class MinecraftBridge:
         cmd = [
             self.node_executable,
             str(self.bot_script),
-            "--host", self.host,
-            "--port", str(self.minecraft_port),
-            "--username", self.username,
-            "--ipc-port", str(self.ipc_port),
-            "--auth", self.auth,
+            "--host",
+            self.host,
+            "--port",
+            str(self.minecraft_port),
+            "--username",
+            self.username,
+            "--ipc-port",
+            str(self.ipc_port),
+            "--auth",
+            self.auth,
         ]
         if self.password:
             cmd += ["--password", self.password]
@@ -133,9 +138,7 @@ class MinecraftBridge:
             if spawned.done():
                 return
             reason = data.get("message") or data.get("reason") or "disconnected"
-            spawned.set_exception(
-                BridgeError(self._minecraft_connect_hint(str(reason)))
-            )
+            spawned.set_exception(BridgeError(self._minecraft_connect_hint(str(reason))))
 
         self.on_event("bot.spawned", _on_spawned)
         self.on_event("bot.error", _on_failed)
@@ -259,14 +262,14 @@ class MinecraftBridge:
 
     async def get_state(self) -> dict[str, Any]:
         """Return a full world-state snapshot from the bot."""
-        return await self.call("get_state")  # type: ignore[return-value]
+        return await self.call("get_state")
 
     async def perform_action(self, action: dict[str, Any]) -> dict[str, Any]:
         """Execute one action dict (matches Action.model_dump()) on the bot."""
-        return await self.call("perform_action", action=action)  # type: ignore[return-value]
+        return await self.call("perform_action", action=action)
 
     async def get_map(self, origin_x: int, origin_z: int, size: int = 128) -> dict[str, Any]:
-        return await self.call("get_map", origin_x=origin_x, origin_z=origin_z, size=size)  # type: ignore[return-value]
+        return await self.call("get_map", origin_x=origin_x, origin_z=origin_z, size=size)
 
     # ------------------------------------------------------------------
     # Event subscription (push events from Node → Python)
@@ -327,7 +330,7 @@ class MinecraftBridge:
     # Context manager support
     # ------------------------------------------------------------------
 
-    async def __aenter__(self) -> "MinecraftBridge":
+    async def __aenter__(self) -> MinecraftBridge:
         await self.connect()
         return self
 

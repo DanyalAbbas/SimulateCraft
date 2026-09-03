@@ -40,12 +40,15 @@ log = logging.getLogger(__name__)
 try:
     from pydantic_ai import Agent as PydanticAgent
 except ImportError as exc:  # pragma: no cover - exercised only without [llm] extra
-    raise ImportError("brains.llm requires the [llm] extra: pip install simulatecraft[llm]") from exc
+    raise ImportError(
+        "brains.llm requires the [llm] extra: pip install simulatecraft[llm]"
+    ) from exc
 
 
 # ---------------------------------------------------------------------------
 # Model resolution helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_pydantic_ai_model(model: str | Any) -> Any:
     """Convert a SimulateCraft model string to a pydantic-ai model object.
@@ -58,7 +61,7 @@ def _build_pydantic_ai_model(model: str | Any) -> Any:
         return model  # already a pydantic-ai model/object
 
     if model.startswith("openrouter:"):
-        model_name = model[len("openrouter:"):]
+        model_name = model[len("openrouter:") :]
         return _make_openrouter_model(model_name)
 
     return model  # pydantic-ai handles everything else by string prefix
@@ -77,7 +80,7 @@ def _make_openrouter_model(model_name: str) -> Any:
 
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not api_key:
-        raise EnvironmentError(
+        raise OSError(
             "OPENROUTER_API_KEY is not set.\n"
             "Get a free key at https://openrouter.ai/keys then:\n"
             "  export OPENROUTER_API_KEY=sk-or-..."
@@ -107,6 +110,7 @@ def resolve_model(env_var: str = "SIMULATECRAFT_MODEL") -> str:
     4. No keys at all  →  ``"test"`` (offline TestModel, zero network calls)
     """
     from dotenv import load_dotenv
+
     load_dotenv()
 
     model = os.getenv(env_var, "").strip()

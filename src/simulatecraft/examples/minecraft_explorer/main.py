@@ -75,12 +75,13 @@ def _attach_progress(bus) -> None:
 
     bus.subscribe(on_event)
 
+
 # Map CLI name → (brain factory, in-game username, goal text)
 AGENT_REGISTRY: dict[str, tuple] = {
-    "explorer": (explorer, "Alex",  "explore as much of the world as possible"),
-    "builder":  (builder,  "Bea",   "build a shelter before nightfall"),
-    "gatherer": (gatherer, "Cole",  "collect wood, stone, and food"),
-    "defender": (defender, "Dana",  "craft armour and keep teammates safe"),
+    "explorer": (explorer, "Alex", "explore as much of the world as possible"),
+    "builder": (builder, "Bea", "build a shelter before nightfall"),
+    "gatherer": (gatherer, "Cole", "collect wood, stone, and food"),
+    "defender": (defender, "Dana", "craft armour and keep teammates safe"),
 }
 
 
@@ -113,9 +114,7 @@ def build(
 
     for i, name in enumerate(agent_names):
         if name not in AGENT_REGISTRY:
-            raise ValueError(
-                f"Unknown agent '{name}'. Choose from: {', '.join(AGENT_REGISTRY)}"
-            )
+            raise ValueError(f"Unknown agent '{name}'. Choose from: {', '.join(AGENT_REGISTRY)}")
         factory, username, goal = AGENT_REGISTRY[name]
         ipc_port = 25570 + i
         env.add_bot(name, username=username, ipc_port=ipc_port, goal=goal)
@@ -141,9 +140,7 @@ async def run_headless(
     log_file: str | None,
     mc_version: str | None = None,
 ) -> None:
-    env, runner = build(
-        host, port, agent_names, model, tick_rate, max_ticks, mc_version=mc_version
-    )
+    env, runner = build(host, port, agent_names, model, tick_rate, max_ticks, mc_version=mc_version)
     _attach_progress(runner.bus)
     if log_file:
         JsonlLogger(log_file, runner.bus)
@@ -170,9 +167,7 @@ async def run_with_server(
 ) -> None:
     from simulatecraft.server import SimulationServer
 
-    env, runner = build(
-        host, port, agent_names, model, tick_rate, max_ticks, mc_version=mc_version
-    )
+    env, runner = build(host, port, agent_names, model, tick_rate, max_ticks, mc_version=mc_version)
     _attach_progress(runner.bus)
     if log_file:
         JsonlLogger(log_file, runner.bus)
@@ -180,10 +175,7 @@ async def run_with_server(
     print(f"Connecting {len(agent_names)} bot(s) to {host}:{port}  [model: {model}]")
     async with env:
         server = SimulationServer(runner, host=viewer_host, port=viewer_port)
-        print(
-            f"Live viewer → http://{viewer_host}:{viewer_port}  "
-            "(Ctrl-C to stop)"
-        )
+        print(f"Live viewer → http://{viewer_host}:{viewer_port}  (Ctrl-C to stop)")
         await server.serve(run_simulation=True)
 
 
@@ -193,9 +185,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Model string examples:\n"
-            "  openrouter:meta-llama/llama-3.1-8b-instruct:free  (free, needs OPENROUTER_API_KEY)\n"
-            "  openrouter:google/gemma-3-27b-it:free              (free, needs OPENROUTER_API_KEY)\n"
-            "  openrouter:anthropic/claude-sonnet-4.6             (paid, needs OPENROUTER_API_KEY)\n"
+            "  openrouter:meta-llama/llama-3.1-8b-instruct:free  (free)\n"
+            "  openrouter:google/gemma-3-27b-it:free              (free)\n"
+            "  openrouter:anthropic/claude-sonnet-4.6             (paid)\n"
             "  anthropic:claude-sonnet-4-5                        (needs ANTHROPIC_API_KEY)\n"
             "  openai:gpt-4o-mini                                 (needs OPENAI_API_KEY)\n"
             "  test                                               (offline, no key needed)\n"
@@ -243,9 +235,14 @@ def main() -> None:
     if args.serve:
         asyncio.run(
             run_with_server(
-                args.host, args.port, args.agents, model,
-                args.tick_rate, args.ticks,
-                args.viewer_host, args.viewer_port,
+                args.host,
+                args.port,
+                args.agents,
+                model,
+                args.tick_rate,
+                args.ticks,
+                args.viewer_host,
+                args.viewer_port,
                 args.log,
                 args.mc_version,
             )
@@ -253,8 +250,12 @@ def main() -> None:
     else:
         asyncio.run(
             run_headless(
-                args.host, args.port, args.agents, model,
-                args.tick_rate, args.ticks,
+                args.host,
+                args.port,
+                args.agents,
+                model,
+                args.tick_rate,
+                args.ticks,
                 args.log,
                 args.mc_version,
             )

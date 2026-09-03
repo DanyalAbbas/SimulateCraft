@@ -4,9 +4,9 @@
 
 site_name: SimulateCraft
 site_description: LLM-driven AI agent simulations in Minecraft
-site_url: https://example.com/simulatecraft/
-repo_url: https://github.com/example/simulatecraft
-repo_name: simulatecraft
+site_url: https://danyalabbas.github.io/SimulateAI/
+repo_url: https://github.com/DanyalAbbas/SimulateAI
+repo_name: DanyalAbbas/SimulateAI
 
 docs_dir: docs
 site_dir: site

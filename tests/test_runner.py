@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
+from helpers import FixedAction, SayAction, ScriptedBrain, StubEnvironment
 from simulatecraft.core import (
     Agent,
     AgentRemoved,
@@ -14,7 +15,6 @@ from simulatecraft.core import (
     HumanControl,
     Observation,
 )
-from helpers import FixedAction, SayAction, ScriptedBrain, StubEnvironment
 
 
 async def test_runner_emits_tick_events(make_runner) -> None:

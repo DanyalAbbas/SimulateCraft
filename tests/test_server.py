@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from helpers import FixedAction, ScriptedBrain, StubEnvironment
 from simulatecraft.core import Agent, AgentState, Runner, RunnerConfig
 from simulatecraft.server.app import create_app
-from helpers import FixedAction, ScriptedBrain, StubEnvironment
 
 
 @pytest.fixture()
