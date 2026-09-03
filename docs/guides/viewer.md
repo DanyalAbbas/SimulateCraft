@@ -26,4 +26,8 @@ client → server: {"type":"chat","text":...,"target":...}
                  {"type":"control","command":"pause"|"resume"|"step"|...}
 ```
 
-Static assets live in `src/simulatecraft/server/static/` (`index.html`, `style.css`, `app.js`). Override map drawing with `window.customRenderer = (ctx, state) => { ... }`.
+Static assets live in `src/simulatecraft/server/static/`
+(`index.html`, `style.css`, `app.js`). Override map drawing with
+`window.customRenderer = (ctx, state) => { ... }`.
+
+API surface: [`SimulationServer`](../reference/server/app.md).

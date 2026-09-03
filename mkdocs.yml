@@ -30,11 +30,17 @@ theme:
     text: Outfit
     code: IBM Plex Mono
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.indexes
     - navigation.expand
+    - navigation.path
     - navigation.top
     - search.suggest
+    - search.highlight
     - content.code.copy
+    - content.tabs.link
     - toc.follow
 
 plugins:
@@ -55,10 +61,14 @@ plugins:
               ignore_init_summary: true
             show_source: true
             show_root_heading: true
-            show_root_full_path: false
+            show_root_full_path: true
             show_symbol_type_heading: true
             show_symbol_type_toc: true
+            show_signature_annotations: true
+            separate_signature: true
+            signature_crossrefs: true
             members_order: source
+            group_by_category: true
             merge_init_into_class: true
             filters:
               - "!^_"
@@ -66,8 +76,12 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - pymdownx.details
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.highlight:
       anchor_linenums: true
   - tables
@@ -76,10 +90,19 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Architecture: architecture.md
-  - Live viewer: viewer.md
+  - Guides:
+    - guides/index.md
+    - Installation: guides/installation.md
+    - Quickstart: guides/quickstart.md
+    - Architecture: guides/architecture.md
+    - Actions & observations: guides/actions.md
+    - Memory & planning: guides/cognition.md
+    - Live viewer: guides/viewer.md
   - API reference: reference/
 
 watch:
   - src/simulatecraft
+
+exclude_docs: |
+  gen_ref_pages.py
+  **/SUMMARY.md

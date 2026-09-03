@@ -1,23 +1,25 @@
-# SimulateCraft documentation
+# SimulateCraft
 
-**LLM-driven AI agent simulations in Minecraft.**
+**LLM agents that play Minecraft.**
 
-SimulateCraft drops LLM-powered bots into a Minecraft server. Each bot gets a persona, long-term memory, planning, typed actions, and a live browser map so you can watch them think and act.
+Drop one or more LLM-powered bots into a Java Edition server. Each bot gets a
+persona, long-term memory, a goal, typed actions, and a live map in your browser.
 
-## What you can do here
+## Browse the docs
 
-- [Getting started](getting-started.md) — install, `.env`, `./run.sh`
-- [Architecture](architecture.md) — runner, bridge, Mineflayer, EventBus
-- [Live viewer](viewer.md) — the cartography UI at `:8000`
-- [API reference](reference/) — **auto-generated** from every Python module
-
-!!! tip "Docs stay in sync"
-    The API reference is rebuilt from live source on every `mkdocs build` /
-    `mkdocs serve`. Edit module docstrings under `src/simulatecraft/` — do not
-    hand-edit pages under `reference/`.
+| Section | What’s inside |
+|---|---|
+| **[Guides](guides/index.md)** | Installation, quickstart, architecture, actions, memory, viewer |
+| **[API reference](reference/)** | Auto-generated docs for every Python module |
 
 ```bash
-uv sync --extra docs
-DISABLE_MKDOCS_2_WARNING=true uv run mkdocs serve
-# docs usually open at http://127.0.0.1:8000 (next free port if the viewer is up)
+echo 'GROQ_API_KEY=gsk_your_key' > .env
+./run.sh
+# viewer → http://127.0.0.1:8000
+# docs  → https://danyalabbas.github.io/SimulateCraft/
 ```
+
+!!! tip "Docs auto-update"
+    The **API reference** tab is rebuilt from live docstrings on every
+    `mkdocs build`. Change docstrings under `src/simulatecraft/` — do not
+    hand-edit generated pages under `reference/`.
