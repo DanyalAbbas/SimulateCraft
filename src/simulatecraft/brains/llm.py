@@ -123,7 +123,7 @@ def _make_openai_compatible_model(model_name: str, *, base_url: str | None = Non
     from pydantic_ai.models.openai import OpenAIChatModel
     from pydantic_ai.providers.openai import OpenAIProvider
 
-    url = (base_url or os.getenv("OPENAI_BASE_URL", "")).strip()
+    url = (base_url or os.getenv("OPENAI_BASE_URL") or "").strip()
     if not url:
         raise OSError(
             "OPENAI_BASE_URL is not set.\n"
