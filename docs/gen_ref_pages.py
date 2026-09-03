@@ -1,7 +1,7 @@
 """Auto-generate one MkDocs page per SimulateCraft Python module.
 
 Runs on every ``mkdocs build`` / ``mkdocs serve`` via the gen-files plugin.
-Edit docstrings under ``src/simulatecraft`` — no hand-written guide pages.
+Editing docstrings in ``src/simulatecraft`` keeps the API sidebar in sync.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import mkdocs_gen_files
 
 PACKAGE = "simulatecraft"
 SRC = Path("src") / PACKAGE
+REF = Path("reference")
 
 NAV_LABELS = {
     "brains": "brains",
@@ -68,13 +69,13 @@ for path in sorted(SRC.rglob("*.py")):
         parts = parts[:-1]
         if not parts:
             continue
-        doc_path = Path(*parts, "index.md")
+        doc_path = REF.joinpath(*parts, "index.md")
         ident = ".".join((PACKAGE, *parts))
     else:
-        doc_path = Path(*parts).with_suffix(".md")
+        doc_path = REF.joinpath(*parts).with_suffix(".md")
         ident = ".".join((PACKAGE, *parts))
 
-    nav[tuple(_label(p) for p in parts)] = doc_path.as_posix()
+    nav[tuple(_label(p) for p in parts)] = doc_path.relative_to(REF).as_posix()
 
     with mkdocs_gen_files.open(doc_path, "w") as fd:
         fd.write(f"# `{ident}`\n\n")
@@ -82,16 +83,16 @@ for path in sorted(SRC.rglob("*.py")):
 
     mkdocs_gen_files.set_edit_path(doc_path, path)
 
-with mkdocs_gen_files.open("SUMMARY.md", "w") as nav_file:
+with mkdocs_gen_files.open(REF / "SUMMARY.md", "w") as nav_file:
     nav_file.writelines(nav.build_literate_nav())
 
-with mkdocs_gen_files.open("index.md", "w") as index:
+with mkdocs_gen_files.open(REF / "index.md", "w") as index:
     index.write(
-        f"""# SimulateCraft
+        f"""# API reference
 
-Auto-generated API reference for `{PACKAGE}`. Edit module docstrings under
-`src/{PACKAGE}/` — this site rebuilds from source on every docs build.
+Auto-generated docs for every public module in `{PACKAGE}`.
 
-Use the sidebar to open any module.
+Edit docstrings under `src/{PACKAGE}/` — this section rebuilds on every
+`mkdocs build`. Use the left sidebar to open a module.
 """
     )

@@ -339,8 +339,8 @@ Guide pages live in `docs/`; the `reference/` tree is produced by
 
 Published docs (from `main`): [https://danyalabbas.github.io/SimulateCraft/](https://danyalabbas.github.io/SimulateCraft/)
 
-The site is the auto-generated API reference (one page per module from source
-docstrings). No hand-written guide pages.
+Left sidebar: **Home**, **Getting started**, **Architecture**, **Live viewer**,
+then the full **API reference** module tree (auto-generated from source).
 
 ### CI / CD
 
