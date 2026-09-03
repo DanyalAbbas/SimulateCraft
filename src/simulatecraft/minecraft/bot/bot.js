@@ -537,8 +537,17 @@ async function executeAction(rpcId, action) {
           block = itemId != null ? bot.findBlock({ matching: itemId, maxDistance: 6 }) : null;
         }
         if (!block) { sendResult(rpcId, { ok: false, reason: "block not found" }); break; }
-        await bot.dig(block);
-        sendResult(rpcId, { ok: true, mined: block.name });
+        // Stop movement first — digging while pathfinding aborts with "Digging aborted".
+        try { bot.pathfinder.setGoal(null); } catch (_) { /* no pathfinder */ }
+        ["forward", "back", "left", "right", "sprint", "jump"].forEach((c) => {
+          try { bot.setControlState(c, false); } catch (_) { /* ignore */ }
+        });
+        try {
+          await bot.dig(block);
+          sendResult(rpcId, { ok: true, mined: block.name });
+        } catch (err) {
+          sendResult(rpcId, { ok: false, reason: String(err.message || err) });
+        }
         break;
       }
 
@@ -582,9 +591,21 @@ async function executeAction(rpcId, action) {
         const mcData = require("minecraft-data")(bot.version);
         const itemData = mcData.itemsByName[action.item_name];
         if (!itemData) { sendResult(rpcId, { ok: false, reason: "unknown item" }); break; }
+        const item = bot.inventory.findInventoryItem(itemData.id, null);
+        if (!item) {
+          sendResult(rpcId, {
+            ok: false,
+            reason: `item not in inventory: ${action.item_name}`,
+          });
+          break;
+        }
         const dest = action.destination === "hand" ? "hand" : action.destination;
-        await bot.equip(itemData.id, dest);
-        sendResult(rpcId, { ok: true });
+        try {
+          await bot.equip(item, dest);
+          sendResult(rpcId, { ok: true, equipped: item.name, destination: dest });
+        } catch (err) {
+          sendResult(rpcId, { ok: false, reason: String(err.message || err) });
+        }
         break;
       }
 
@@ -592,8 +613,21 @@ async function executeAction(rpcId, action) {
         const mcData = require("minecraft-data")(bot.version);
         const itemData = mcData.itemsByName[action.item_name];
         if (!itemData) { sendResult(rpcId, { ok: false, reason: "unknown item" }); break; }
-        await bot.tossStack(bot.inventory.findInventoryItem(itemData.id, null));
-        sendResult(rpcId, { ok: true });
+        const item = bot.inventory.findInventoryItem(itemData.id, null);
+        if (!item) {
+          sendResult(rpcId, {
+            ok: false,
+            reason: `item not in inventory: ${action.item_name}`,
+          });
+          break;
+        }
+        const count = Math.min(action.count || item.count, item.count);
+        try {
+          await bot.toss(item.type, item.metadata, count);
+          sendResult(rpcId, { ok: true, dropped: item.name, count });
+        } catch (err) {
+          sendResult(rpcId, { ok: false, reason: String(err.message || err) });
+        }
         break;
       }
 
@@ -601,13 +635,45 @@ async function executeAction(rpcId, action) {
         const mcData = require("minecraft-data")(bot.version);
         const itemData = mcData.itemsByName[action.item_name];
         if (!itemData) { sendResult(rpcId, { ok: false, reason: "unknown item" }); break; }
-        const table = action.use_crafting_table
-          ? bot.findBlock({ matching: mcData.blocksByName.crafting_table?.id, maxDistance: 4 })
-          : null;
-        const recipes = bot.recipesFor(itemData.id, null, action.count || 1, table);
-        if (!recipes.length) { sendResult(rpcId, { ok: false, reason: "no recipe available" }); break; }
-        await bot.craft(recipes[0], action.count || 1, table);
-        sendResult(rpcId, { ok: true });
+        const want = Math.max(1, action.count || 1);
+        let table = null;
+        if (action.use_crafting_table) {
+          table = bot.findBlock({
+            matching: mcData.blocksByName.crafting_table?.id,
+            maxDistance: 4,
+          });
+          if (!table) {
+            sendResult(rpcId, { ok: false, reason: "no crafting_table nearby" });
+            break;
+          }
+        }
+        // Prefer recipes the bot can actually afford right now.
+        let recipes = bot.recipesFor(itemData.id, null, want, table);
+        if (!recipes.length && !table) {
+          // Retry with a nearby table in case the recipe needs a 3x3 grid.
+          table = bot.findBlock({
+            matching: mcData.blocksByName.crafting_table?.id,
+            maxDistance: 4,
+          });
+          if (table) recipes = bot.recipesFor(itemData.id, null, want, table);
+        }
+        if (!recipes.length) {
+          sendResult(rpcId, {
+            ok: false,
+            reason: `cannot craft ${action.item_name} (missing ingredients` +
+              (table ? "" : " or need crafting_table") + ")",
+          });
+          break;
+        }
+        try {
+          await bot.craft(recipes[0], want, table);
+          sendResult(rpcId, { ok: true, crafted: action.item_name, count: want });
+        } catch (err) {
+          sendResult(rpcId, {
+            ok: false,
+            reason: String(err.message || err),
+          });
+        }
         break;
       }
 

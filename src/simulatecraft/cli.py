@@ -96,6 +96,8 @@ def require_llm_key() -> None:
         os.getenv("GROQ_API_KEY")
         or os.getenv("OPENROUTER_API_KEY")
         or os.getenv("SIMULATECRAFT_MODEL")
+        or os.getenv("OPENAI_BASE_URL")
+        or os.getenv("OPENAI_API_KEY")
     ):
         return
     sys.exit(
@@ -104,7 +106,11 @@ def require_llm_key() -> None:
         "     https://console.groq.com/keys\n"
         "2. Put it in a .env file in this folder:\n"
         "     echo 'GROQ_API_KEY=gsk_your_key' > .env\n"
-        "3. Run ./run.sh again.\n"
+        "3. Run ./run.sh again.\n\n"
+        "Or point at an OpenAI-compatible gateway (e.g. 9Router):\n"
+        "     OPENAI_BASE_URL=http://localhost:20128/v1\n"
+        "     OPENAI_API_KEY=<dashboard-key>\n"
+        "     SIMULATECRAFT_MODEL=oc/mimo-v2.5-free\n"
     )
 
 

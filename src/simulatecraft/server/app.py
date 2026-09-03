@@ -119,7 +119,7 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
                 raw = await ws.receive_text()
                 try:
                     message = json.loads(raw)
-                    await _handle_client_message(runner, message)
+                    await _handle_client_message(runner, message, ws)
                 except (json.JSONDecodeError, KeyError, ValueError) as exc:
                     log.warning("bad inbound ws message: %s (%s)", raw[:120], exc)
         except WebSocketDisconnect:
@@ -171,7 +171,9 @@ async def _apply_control(runner: Runner, command: str) -> None:
         raise ValueError(f"unknown control command {command!r}")
 
 
-async def _handle_client_message(runner: Runner, message: dict[str, Any]) -> None:
+async def _handle_client_message(
+    runner: Runner, message: dict[str, Any], ws: WebSocket | None = None
+) -> None:
     msg_type = message.get("type")
     if msg_type == "chat":
         runner.bus.publish_inbound(
@@ -183,6 +185,17 @@ async def _handle_client_message(runner: Runner, message: dict[str, Any]) -> Non
         )
     elif msg_type == "control":
         await _apply_control(runner, str(message["command"]))
+    elif msg_type == "map":
+        env = runner.environment
+        fetch = getattr(env, "fetch_map", None)
+        if not callable(fetch):
+            raise ValueError("environment does not support map tiles")
+        origin_x = int(message["origin_x"])
+        origin_z = int(message["origin_z"])
+        size = int(message.get("size") or 128)
+        map_data = await fetch(origin_x, origin_z, size)
+        if ws is not None:
+            await ws.send_text(json.dumps({"type": "map", "map": map_data}))
     else:
         raise ValueError(f"unknown inbound type {msg_type!r}")
 

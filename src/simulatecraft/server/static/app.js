@@ -1,23 +1,45 @@
-/* SimulateCraft live viewer — plain JS + canvas, no build step.
+/* SimulateCraft live viewer — full-bleed pannable map + event rail.
    Protocol:
-     server → client: {"type":"event","event":{...}} | {"type":"state","state":{...}}
-     client → server: {"type":"chat",...} | {"type":"control","command":...}
+     server → client: event | state | map
+     client → server: chat | control | map
 */
 
 const canvas = document.getElementById("world");
 const ctx = canvas.getContext("2d");
+const viewport = document.getElementById("map-viewport");
 const logEl = document.getElementById("event-log");
 const statusEl = document.getElementById("status");
 const tickEl = document.getElementById("tick-counter");
+const coordEl = document.getElementById("coord-readout");
 const targetSel = document.getElementById("chat-target");
 const hudEl = document.getElementById("hud");
 const agentCountEl = document.getElementById("agent-count");
 const mapOverlay = document.getElementById("map-overlay");
+const followBtn = document.getElementById("btn-follow");
+
+const TILE = 128;
+const MIN_ZOOM = 1.5; // px per block
+const MAX_ZOOM = 24;
 
 let latestState = null;
 let socket = null;
 let reconnectDelay = 1000;
 let activeFilter = "all";
+let followAgents = true;
+let homeX = 0;
+let homeZ = 0;
+let panLimit = 512;
+let tileSize = TILE;
+let camera = { x: 0, z: 0, zoom: 6 };
+let tiles = new Map(); // "ox,oz" -> {canvas, origin_x, origin_z, width, height}
+let pendingTiles = new Set();
+let drag = null;
+let needsDraw = true;
+
+function setMapLoading(loading) {
+  if (!mapOverlay) return;
+  mapOverlay.hidden = !loading;
+}
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -25,6 +47,8 @@ function connect() {
   socket.onopen = () => {
     setStatus("running", "connected");
     reconnectDelay = 1000;
+    if (tiles.size === 0) setMapLoading(true);
+    requestVisibleTiles(true);
   };
   socket.onclose = () => {
     setStatus("stopped", "disconnected");
@@ -40,6 +64,7 @@ function connect() {
     }
     if (data.type === "event") handleEvent(data.event);
     else if (data.type === "state") applyState(data.state);
+    else if (data.type === "map") ingestMap(data.map);
   };
 }
 
@@ -54,99 +79,254 @@ function setStatus(state, label) {
   statusEl.className = `status ${state}`;
   const labelEl = statusEl.querySelector(".status-label");
   if (labelEl) labelEl.textContent = label;
-  else statusEl.textContent = label;
 }
 
 function applyState(state) {
   latestState = state;
   const status = state.status || {};
-  const tick = (state.snapshot && state.snapshot.tick) ?? status.tick ?? 0;
+  const snap = state.snapshot || {};
+  const world = snap.world || {};
+  const tick = snap.tick ?? status.tick ?? 0;
   tickEl.textContent = `t=${tick}`;
 
   if (status.paused) setStatus("paused", "paused");
   else if (status.running) setStatus("running", "running");
   else if (socket && socket.readyState === WebSocket.OPEN) setStatus("running", "connected");
 
-  render();
+  if (Array.isArray(world.home_xz) && world.home_xz.length >= 2) {
+    homeX = Number(world.home_xz[0]);
+    homeZ = Number(world.home_xz[1]);
+  }
+  if (world.pan_limit != null) panLimit = Number(world.pan_limit) || panLimit;
+  if (world.tile_size != null) tileSize = Number(world.tile_size) || tileSize;
+
+  if (world.map && world.map.pixels) ingestMap(world.map);
+
+  if (followAgents) {
+    const center = agentCentroid(snap.agents || {});
+    if (center) {
+      camera.x = center[0];
+      camera.z = center[1];
+      clampCamera();
+    }
+  }
+
   updateAgentList(state);
   updateHud(state);
+  updateCoordReadout();
+  requestVisibleTiles(false);
+  needsDraw = true;
 }
 
-function render() {
-  if (!latestState) return;
-  if (typeof window.customRenderer === "function") {
-    window.customRenderer(ctx, latestState);
+function agentCentroid(agents) {
+  const pts = [];
+  for (const info of Object.values(agents)) {
+    const p = info.position_3d || info.position;
+    if (!p || p.length < 2) continue;
+    const x = Number(p[0]);
+    const z = Number(p.length > 2 ? p[2] : p[1]);
+    pts.push([x, z]);
+  }
+  if (!pts.length) return null;
+  return [
+    pts.reduce((s, p) => s + p[0], 0) / pts.length,
+    pts.reduce((s, p) => s + p[1], 0) / pts.length,
+  ];
+}
+
+function tileKey(ox, oz) {
+  return `${ox},${oz}`;
+}
+
+function ingestMap(map) {
+  if (!map || !map.pixels) return;
+  const w = Number(map.width || tileSize);
+  const h = Number(map.height || tileSize);
+  const ox = Math.floor(Number(map.origin_x));
+  const oz = Math.floor(Number(map.origin_z));
+  const key = tileKey(ox, oz);
+  pendingTiles.delete(key);
+
+  try {
+    const raw = Uint8Array.from(atob(map.pixels), (c) => c.charCodeAt(0));
+    const off = document.createElement("canvas");
+    off.width = w;
+    off.height = h;
+    const octx = off.getContext("2d");
+    const img = octx.createImageData(w, h);
+    for (let i = 0; i < w * h; i++) {
+      img.data[i * 4] = raw[i * 3];
+      img.data[i * 4 + 1] = raw[i * 3 + 1];
+      img.data[i * 4 + 2] = raw[i * 3 + 2];
+      img.data[i * 4 + 3] = 255;
+    }
+    octx.putImageData(img, 0, 0);
+    tiles.set(key, { canvas: off, origin_x: ox, origin_z: oz, width: w, height: h });
+    setMapLoading(false);
+    needsDraw = true;
+  } catch (err) {
+    console.warn("bad map tile", err);
+  }
+}
+
+function visibleWorldBounds() {
+  const halfW = (canvas.width / 2) / camera.zoom;
+  const halfH = (canvas.height / 2) / camera.zoom;
+  return {
+    minX: camera.x - halfW,
+    maxX: camera.x + halfW,
+    minZ: camera.z - halfH,
+    maxZ: camera.z + halfH,
+  };
+}
+
+function requestVisibleTiles(force) {
+  const b = visibleWorldBounds();
+  const pad = tileSize * 0.25;
+  const minTX = Math.floor((b.minX - pad) / tileSize) * tileSize;
+  const maxTX = Math.floor((b.maxX + pad) / tileSize) * tileSize;
+  const minTZ = Math.floor((b.minZ - pad) / tileSize) * tileSize;
+  const maxTZ = Math.floor((b.maxZ + pad) / tileSize) * tileSize;
+
+  for (let ox = minTX; ox <= maxTX; ox += tileSize) {
+    for (let oz = minTZ; oz <= maxTZ; oz += tileSize) {
+      if (!tileInPanBounds(ox, oz)) continue;
+      const key = tileKey(ox, oz);
+      if (!force && (tiles.has(key) || pendingTiles.has(key))) continue;
+      pendingTiles.add(key);
+      send({ type: "map", origin_x: ox, origin_z: oz, size: tileSize });
+    }
+  }
+}
+
+function tileInPanBounds(ox, oz) {
+  // Allow tiles that intersect the allowed exploration square.
+  const min = homeX - panLimit;
+  const max = homeX + panLimit;
+  const minZ = homeZ - panLimit;
+  const maxZ = homeZ + panLimit;
+  return ox + tileSize > min && ox < max && oz + tileSize > minZ && oz < maxZ;
+}
+
+function clampCamera() {
+  camera.x = Math.max(homeX - panLimit, Math.min(homeX + panLimit, camera.x));
+  camera.z = Math.max(homeZ - panLimit, Math.min(homeZ + panLimit, camera.z));
+  camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.zoom));
+}
+
+function updateCoordReadout() {
+  if (!coordEl) return;
+  coordEl.textContent = `${camera.x.toFixed(0)}, ${camera.z.toFixed(0)}`;
+}
+
+function resizeCanvas() {
+  if (!viewport) return;
+  const rect = viewport.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.floor(rect.width * dpr));
+  const h = Math.max(1, Math.floor(rect.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+    needsDraw = true;
+  }
+}
+
+function worldToScreen(wx, wz) {
+  return [
+    canvas.width / 2 + (wx - camera.x) * camera.zoom,
+    canvas.height / 2 + (wz - camera.z) * camera.zoom,
+  ];
+}
+
+function screenToWorld(sx, sy) {
+  return [
+    camera.x + (sx - canvas.width / 2) / camera.zoom,
+    camera.z + (sy - canvas.height / 2) / camera.zoom,
+  ];
+}
+
+function draw() {
+  resizeCanvas();
+  if (!needsDraw && !drag) {
+    requestAnimationFrame(draw);
     return;
   }
-  defaultRender(latestState);
-}
+  needsDraw = false;
 
-function defaultRender(state) {
-  const snap = state.snapshot || {};
-  const world = snap.world || {};
-  const agents = snap.agents || {};
-  const map = world.map || {};
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const mw = Number(map.width || 128);
-  const mh = Number(map.height || 128);
-  const originX = Number(map.origin_x != null ? map.origin_x : (world.origin_xz || [0, 0])[0]);
-  const originZ = Number(map.origin_z != null ? map.origin_z : (world.origin_xz || [0, 0])[1]);
-  const pad = 18;
-  const inner = Math.min(canvas.width, canvas.height) - pad * 2;
-  const scale = inner / Math.max(mw, mh);
-  const offX = (canvas.width - mw * scale) / 2;
-  const offY = (canvas.height - mh * scale) / 2;
-
-  ctx.fillStyle = "#d2b48c";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#c4a574";
-  ctx.fillRect(offX - 4, offY - 4, mw * scale + 8, mh * scale + 8);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const hasPixels = Boolean(map.pixels);
-  if (mapOverlay) mapOverlay.hidden = hasPixels;
+  // Unexplored parchment grid
+  ctx.save();
+  ctx.strokeStyle = "rgba(90, 70, 50, 0.25)";
+  ctx.lineWidth = 1;
+  const b = visibleWorldBounds();
+  const step = tileSize;
+  const gx0 = Math.floor(b.minX / step) * step;
+  const gz0 = Math.floor(b.minZ / step) * step;
+  for (let x = gx0; x <= b.maxX; x += step) {
+    const [sx] = worldToScreen(x, 0);
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, canvas.height);
+    ctx.stroke();
+  }
+  for (let z = gz0; z <= b.maxZ; z += step) {
+    const [, sy] = worldToScreen(0, z);
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(canvas.width, sy);
+    ctx.stroke();
+  }
+  ctx.restore();
 
-  if (hasPixels) {
-    drawMapPixels(map, offX, offY, scale);
+  // Pan limit border
+  const [x0, y0] = worldToScreen(homeX - panLimit, homeZ - panLimit);
+  const [x1, y1] = worldToScreen(homeX + panLimit, homeZ + panLimit);
+  ctx.strokeStyle = "rgba(241, 194, 50, 0.55)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.setLineDash([]);
+
+  ctx.imageSmoothingEnabled = false;
+  for (const tile of tiles.values()) {
+    const [sx, sy] = worldToScreen(tile.origin_x, tile.origin_z);
+    const dw = tile.width * camera.zoom;
+    const dh = tile.height * camera.zoom;
+    if (sx > canvas.width || sy > canvas.height || sx + dw < 0 || sy + dh < 0) continue;
+    ctx.drawImage(tile.canvas, sx, sy, dw, dh);
   }
 
+  if (typeof window.customRenderer === "function" && latestState) {
+    window.customRenderer(ctx, latestState, { camera, worldToScreen });
+  } else if (latestState) {
+    drawAgents(latestState);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+function drawAgents(state) {
+  const agents = (state.snapshot || {}).agents || {};
   for (const [id, info] of Object.entries(agents)) {
     const p = info.position_3d || info.position;
     if (!p || p.length < 2) continue;
     const wx = Number(p[0]);
     const wz = Number(p.length > 2 ? p[2] : p[1]);
-    const x = offX + (wx - originX) * scale;
-    const y = offY + (wz - originZ) * scale;
-    const yaw = Number(info.yaw || 0);
-    drawMapPointer(x, y, yaw, info.name || id);
+    const [x, y] = worldToScreen(wx, wz);
+    drawMapPointer(x, y, Number(info.yaw || 0), info.name || id);
   }
-}
-
-function drawMapPixels(map, offX, offY, scale) {
-  const w = map.width;
-  const h = map.height;
-  const raw = Uint8Array.from(atob(map.pixels), (c) => c.charCodeAt(0));
-  const tmp = document.createElement("canvas");
-  tmp.width = w;
-  tmp.height = h;
-  const tctx = tmp.getContext("2d");
-  const img = tctx.createImageData(w, h);
-  for (let i = 0; i < w * h; i++) {
-    img.data[i * 4] = raw[i * 3];
-    img.data[i * 4 + 1] = raw[i * 3 + 1];
-    img.data[i * 4 + 2] = raw[i * 3 + 2];
-    img.data[i * 4 + 3] = 255;
-  }
-  tctx.putImageData(img, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(tmp, offX, offY, w * scale, h * scale);
 }
 
 function drawMapPointer(x, y, yawDeg, name) {
   const rad = ((yawDeg + 180) * Math.PI) / 180;
+  const s = Math.max(0.75, Math.min(1.6, camera.zoom / 6));
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rad);
+  ctx.scale(s, s);
   ctx.beginPath();
   ctx.moveTo(0, -9);
   ctx.lineTo(6, 8);
@@ -159,22 +339,23 @@ function drawMapPointer(x, y, yawDeg, name) {
   ctx.fill();
   ctx.stroke();
   ctx.restore();
-  ctx.font = "600 12px Outfit, system-ui, sans-serif";
+
+  ctx.font = "600 12px Figtree, system-ui, sans-serif";
   ctx.textAlign = "center";
   const tw = ctx.measureText(name).width;
   ctx.fillStyle = "rgba(40, 28, 16, 0.78)";
-  ctx.fillRect(x - tw / 2 - 3, y + 10, tw + 6, 15);
+  ctx.fillRect(x - tw / 2 - 3, y + 10 * s, tw + 6, 15);
   ctx.fillStyle = "#f5e6c8";
-  ctx.fillText(name, x, y + 21);
+  ctx.fillText(name, x, y + 10 * s + 11);
 }
 
 function meter(kind, label, value, max = 20) {
   const pct = Math.max(0, Math.min(100, (Number(value) / max) * 100));
   return `
     <div class="meter ${kind}">
-      <span>${label}</span>
-      <div class="meter-bar"><div class="meter-fill" style="width:${pct}%"></div></div>
-      <span>${Number(value).toFixed(0)}</span>
+      <span class="meter-label">${label}</span>
+      <div class="meter-bar"><span class="meter-fill" style="width:${pct}%"></span></div>
+      <span class="meter-val">${Number(value).toFixed(0)}</span>
     </div>`;
 }
 
@@ -183,12 +364,10 @@ function updateHud(state) {
   const agents = (state.snapshot || {}).agents || {};
   const entries = Object.entries(agents);
   if (agentCountEl) agentCountEl.textContent = String(entries.length);
-
   if (!entries.length) {
-    hudEl.innerHTML = '<p class="empty">No agents connected yet.</p>';
+    hudEl.innerHTML = '<p class="empty">No agents yet.</p>';
     return;
   }
-
   hudEl.innerHTML = entries
     .map(([id, info]) => {
       const pos3 = info.position_3d;
@@ -202,7 +381,7 @@ function updateHud(state) {
       const meta = [holding, goal].filter(Boolean).join(" · ");
       return `
         <article class="agent-row">
-          <div>
+          <div class="agent-main">
             <div class="agent-name">${esc(info.name || id)}</div>
             <div class="agent-pos">${esc(pos)}</div>
           </div>
@@ -246,11 +425,7 @@ function handleEvent(ev) {
       break;
     }
     case "agent.spoke":
-      addLogEntry(
-        `<span class="who">${esc(ev.agent_id)}</span> “${esc(ev.text)}”`,
-        ev.tick,
-        "chat"
-      );
+      addLogEntry(`<span class="who">${esc(ev.agent_id)}</span> “${esc(ev.text)}”`, ev.tick, "chat");
       break;
     case "human.chat":
       addLogEntry(
@@ -289,7 +464,7 @@ function addLogEntry(html, tick, cls = "") {
   const div = document.createElement("div");
   div.className = `entry ${cls}`.trim();
   div.dataset.kinds = cls;
-  div.innerHTML = `<span class="tick">t${tick >= 0 ? tick : ""}</span>${html}`;
+  div.innerHTML = `<span class="tick">t${tick >= 0 ? tick : ""}</span><span class="body">${html}</span>`;
   applyFilterToEntry(div);
   logEl.appendChild(div);
   while (logEl.children.length > 300) logEl.removeChild(logEl.firstChild);
@@ -301,8 +476,7 @@ function applyFilterToEntry(el) {
     el.hidden = false;
     return;
   }
-  const kinds = (el.dataset.kinds || "").split(/\s+/);
-  el.hidden = !kinds.includes(activeFilter);
+  el.hidden = !(el.dataset.kinds || "").split(/\s+/).includes(activeFilter);
 }
 
 function setFilter(filter) {
@@ -321,9 +495,90 @@ function esc(s) {
   return d.innerHTML;
 }
 
+function setFollow(on) {
+  followAgents = on;
+  followBtn.classList.toggle("is-active", on);
+  if (on && latestState) {
+    const center = agentCentroid((latestState.snapshot || {}).agents || {});
+    if (center) {
+      camera.x = center[0];
+      camera.z = center[1];
+      clampCamera();
+      updateCoordReadout();
+      requestVisibleTiles(false);
+      needsDraw = true;
+    }
+  }
+}
+
+function pointerToCanvas(evt) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return [(evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY];
+}
+
+viewport.addEventListener("pointerdown", (evt) => {
+  if (evt.button !== 0) return;
+  viewport.setPointerCapture(evt.pointerId);
+  const [sx, sy] = pointerToCanvas(evt);
+  drag = { sx, sy, camX: camera.x, camZ: camera.z };
+  viewport.classList.add("is-dragging");
+  setFollow(false);
+});
+
+viewport.addEventListener("pointermove", (evt) => {
+  if (!drag) return;
+  const [sx, sy] = pointerToCanvas(evt);
+  camera.x = drag.camX - (sx - drag.sx) / camera.zoom;
+  camera.z = drag.camZ - (sy - drag.sy) / camera.zoom;
+  clampCamera();
+  updateCoordReadout();
+  needsDraw = true;
+});
+
+function endDrag(evt) {
+  if (!drag) return;
+  drag = null;
+  viewport.classList.remove("is-dragging");
+  requestVisibleTiles(false);
+  if (evt && viewport.hasPointerCapture?.(evt.pointerId)) {
+    viewport.releasePointerCapture(evt.pointerId);
+  }
+}
+
+viewport.addEventListener("pointerup", endDrag);
+viewport.addEventListener("pointercancel", endDrag);
+
+viewport.addEventListener(
+  "wheel",
+  (evt) => {
+    evt.preventDefault();
+    const [sx, sy] = pointerToCanvas(evt);
+    const [beforeX, beforeZ] = screenToWorld(sx, sy);
+    const factor = evt.deltaY > 0 ? 0.9 : 1.1;
+    camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.zoom * factor));
+    const [afterX, afterZ] = screenToWorld(sx, sy);
+    camera.x += beforeX - afterX;
+    camera.z += beforeZ - afterZ;
+    clampCamera();
+    updateCoordReadout();
+    setFollow(false);
+    requestVisibleTiles(false);
+    needsDraw = true;
+  },
+  { passive: false }
+);
+
+window.addEventListener("resize", () => {
+  needsDraw = true;
+  requestVisibleTiles(false);
+});
+
 document.getElementById("btn-pause").onclick = () => send({ type: "control", command: "pause" });
 document.getElementById("btn-play").onclick = () => send({ type: "control", command: "resume" });
 document.getElementById("btn-step").onclick = () => send({ type: "control", command: "step" });
+followBtn.onclick = () => setFollow(!followAgents);
 
 document.querySelectorAll(".filter").forEach((btn) => {
   btn.addEventListener("click", () => setFilter(btn.dataset.filter));
@@ -348,7 +603,11 @@ window.addEventListener("keydown", (e) => {
     send({ type: "control", command: paused ? "resume" : "pause" });
   } else if (e.key === ".") {
     send({ type: "control", command: "step" });
+  } else if (e.key.toLowerCase() === "f") {
+    setFollow(!followAgents);
   }
 });
 
+setFollow(true);
 connect();
+requestAnimationFrame(draw);

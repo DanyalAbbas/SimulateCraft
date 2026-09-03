@@ -172,6 +172,8 @@ async def test_memories_injected_into_deps() -> None:
     assert deps.persona == "I am Maya."
     assert 1 <= len(deps.memories) <= 3
     assert deps.observation_text
+    assert "Persona:" in captured["prompt"]
+    assert "I am Maya." in captured["prompt"]
     assert "Current observation" in captured["prompt"]
 
 
@@ -188,6 +190,8 @@ async def test_human_message_enters_inbox_then_deps() -> None:
     await brain.decide(make_obs())
     deps = captured["deps"]
     assert any("haunted" in m for m in deps.inbox)
+    assert "Pending messages" in captured["prompt"]
+    assert "haunted" in captured["prompt"]
 
     await brain.decide(make_obs())
     second_deps = captured["deps"]
@@ -262,3 +266,27 @@ async def test_retriever_none_falls_back_to_recent_memory() -> None:
     memories = brain._retrieve_memories(make_obs())
     assert len(memories) == 4
     assert memories[-1] == "note 7"
+
+
+def test_openai_compatible_gateway_builds_chat_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pydantic_ai.models.openai import OpenAIChatModel
+
+    from simulatecraft.brains.llm import _build_pydantic_ai_model
+
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:20128/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    bare = _build_pydantic_ai_model("oc/mimo-v2.5-free")
+    assert isinstance(bare, OpenAIChatModel)
+    assert bare.model_name == "oc/mimo-v2.5-free"
+
+    prefixed = _build_pydantic_ai_model("openai:oc/mimo-v2.5-free")
+    assert isinstance(prefixed, OpenAIChatModel)
+
+    explicit = _build_pydantic_ai_model("openai-compatible:kr/claude-sonnet-4.5")
+    assert isinstance(explicit, OpenAIChatModel)
+    assert explicit.model_name == "kr/claude-sonnet-4.5"
+
+    # Native providers must not be rewritten when a gateway URL is present.
+    assert _build_pydantic_ai_model("groq:openai/gpt-oss-120b") == "groq:openai/gpt-oss-120b"
+    assert _build_pydantic_ai_model("test") == "test"

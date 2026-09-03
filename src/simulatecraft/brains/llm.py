@@ -13,10 +13,18 @@ Model string formats accepted by LLMBrain / resolve_model()
 - ``"openrouter:anthropic/claude-sonnet-4.6"``             ← OpenRouter paid
 - ``"anthropic:claude-sonnet-4-5"``                        ← direct Anthropic key
 - ``"openai:gpt-4o-mini"``                                  ← direct OpenAI key
+- ``"openai-compatible:oc/mimo-v2.5-free"``                 ← any OpenAI-compatible gateway
+- ``"oc/mimo-v2.5-free"``                                   ← same, when OPENAI_BASE_URL is set
 - ``"google-gla:gemini-2.0-flash"``                         ← direct Google key
 - ``"test"``                                                ← offline TestModel, no key needed
 
 Auto-selection order (resolve_model):  GROQ_API_KEY → OPENROUTER_API_KEY → "test"
+
+OpenAI-compatible gateways (9Router, LiteLLM, vLLM, …)
+------------------------------------------------------
+    export OPENAI_BASE_URL=http://localhost:20128/v1
+    export OPENAI_API_KEY=<dashboard-key>
+    export SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
 """
 
 from __future__ import annotations
@@ -50,21 +58,85 @@ except ImportError as exc:  # pragma: no cover - exercised only without [llm] ex
 # ---------------------------------------------------------------------------
 
 
+# Providers pydantic-ai resolves natively (leave alone unless OPENAI_BASE_URL
+# is set and the user explicitly asked for openai: / openai-compatible:).
+_NATIVE_PROVIDER_PREFIXES = (
+    "openrouter:",
+    "groq:",
+    "anthropic:",
+    "google-gla:",
+    "google-vertex:",
+    "mistral:",
+    "cohere:",
+    "bedrock:",
+    "huggingface:",
+    "ollama:",
+    "azure:",
+    "deepseek:",
+    "cerebras:",
+    "together:",
+    "fireworks:",
+    "github:",
+    "heroku:",
+    "moonshotai:",
+    "grok:",
+    "xai:",
+)
+
+
 def _build_pydantic_ai_model(model: str | Any) -> Any:
     """Convert a SimulateCraft model string to a pydantic-ai model object.
 
-    Handles the ``openrouter:<model-name>`` prefix specially; everything else
-    is passed through as-is (pydantic-ai resolves ``anthropic:``, ``openai:``,
-    ``google-gla:`` etc. natively).
+    Special cases
+    -------------
+    - ``openrouter:<name>`` → OpenRouterModel
+    - ``openai-compatible:<name>`` → OpenAI chat via ``OPENAI_BASE_URL``
+      (9Router, LiteLLM, vLLM, LocalAI, …)
+    - When ``OPENAI_BASE_URL`` is set, bare ids like ``oc/mimo-v2.5-free`` and
+      ``openai:<name>`` also use chat completions against that gateway
+      (avoids pydantic-ai's default OpenAI Responses API, which local proxies
+      usually do not implement).
+    - Everything else is passed through for pydantic-ai to resolve.
     """
     if not isinstance(model, str):
         return model  # already a pydantic-ai model/object
 
     if model.startswith("openrouter:"):
-        model_name = model[len("openrouter:") :]
-        return _make_openrouter_model(model_name)
+        return _make_openrouter_model(model[len("openrouter:") :])
+
+    if model.startswith("openai-compatible:"):
+        return _make_openai_compatible_model(model[len("openai-compatible:") :])
+
+    base_url = os.getenv("OPENAI_BASE_URL", "").strip()
+    if base_url:
+        if model.startswith("openai:"):
+            return _make_openai_compatible_model(model[len("openai:") :], base_url=base_url)
+        if model != "test" and not model.startswith(_NATIVE_PROVIDER_PREFIXES):
+            # Bare gateway model ids (e.g. 9Router's oc/…, kr/…)
+            return _make_openai_compatible_model(model, base_url=base_url)
 
     return model  # pydantic-ai handles everything else by string prefix
+
+
+def _make_openai_compatible_model(model_name: str, *, base_url: str | None = None) -> Any:
+    """Build OpenAIChatModel pointed at an OpenAI-compatible gateway."""
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+
+    url = (base_url or os.getenv("OPENAI_BASE_URL", "")).strip()
+    if not url:
+        raise OSError(
+            "OPENAI_BASE_URL is not set.\n"
+            "For 9Router:\n"
+            "  export OPENAI_BASE_URL=http://localhost:20128/v1\n"
+            "  export OPENAI_API_KEY=<key from 9Router dashboard>\n"
+            "  export SIMULATECRAFT_MODEL=oc/mimo-v2.5-free"
+        )
+    api_key = os.getenv("OPENAI_API_KEY", "").strip() or "not-needed"
+    return OpenAIChatModel(
+        model_name,
+        provider=OpenAIProvider(base_url=url, api_key=api_key),
+    )
 
 
 def _make_openrouter_model(model_name: str) -> Any:
@@ -252,10 +324,7 @@ class LLMBrain(Brain[Observation]):
         )
         self._inbox.clear()
 
-        result = await self.agent.run(
-            f"Current observation:\n{observation.render()}\n\nChoose your next action.",
-            deps=deps,
-        )
+        result = await self.agent.run(_decision_prompt(deps), deps=deps)
         action = result.output
         if not isinstance(action, Action):
             raise TypeError(f"LLM produced non-Action output: {type(action).__name__}")
@@ -265,6 +334,9 @@ class LLMBrain(Brain[Observation]):
         summary = "ok" if "error" not in step_result.info else str(step_result.info["error"])
         if "said" in step_result.info:
             summary = f"you said: {step_result.info['said']}"
+        if step_result.info.get("ok") is False:
+            reason = step_result.info.get("reason") or step_result.info.get("error") or "failed"
+            summary = f"FAILED ({step_result.info.get('action', 'action')}): {reason}"
         await self.memory.add(f"Last action result: {summary}", kind="action_result")
         if self.reflection and self._observations_since_reflect >= self.config.reflect_every:
             self._observations_since_reflect = 0
@@ -290,10 +362,41 @@ class LLMBrain(Brain[Observation]):
 
 
 DEFAULT_INSTRUCTIONS = (
-    "You are an agent inside a simulation. Given your persona, relevant "
-    "memories, current plan, pending messages and the latest observation, "
-    "choose exactly one next action. Stay in character."
+    "You are an agent inside a Minecraft world. Stay in character and choose "
+    "exactly one next action from the available action kinds.\n"
+    "Social rules:\n"
+    "- If Pending messages are listed, reply this tick with kind=chat "
+    "(or whisper) before doing anything else.\n"
+    "- Roughly every 4–8 ticks, say a short in-character line with kind=chat "
+    "so teammates and humans can follow what you are doing.\n"
+    "- Prefer short chat lines (under 120 characters).\n"
+    "Inventory rules:\n"
+    "- Only equip / drop / craft items you actually have materials for "
+    "(see Inventory and Craftable now in the observation).\n"
+    "- If the last action failed, do not retry the same action; gather "
+    "resources or pick a different plan."
 )
+
+
+def _decision_prompt(deps: BrainDeps) -> str:
+    """Build the user prompt; deps alone are not visible to the model."""
+    parts = [
+        f"Persona:\n{deps.persona or '(none)'}",
+        f"Tick: {deps.tick}",
+    ]
+    if deps.plan:
+        parts.append(f"Current plan:\n{deps.plan}")
+    if deps.memories:
+        mem = "\n".join(f"- {m}" for m in deps.memories)
+        parts.append(f"Relevant memories:\n{mem}")
+    if deps.inbox:
+        inbox = "\n".join(f"- {m}" for m in deps.inbox)
+        parts.append(
+            f"Pending messages (you MUST reply with kind=chat this tick):\n{inbox}"
+        )
+    parts.append(f"Current observation:\n{deps.observation_text}")
+    parts.append("Choose your next action.")
+    return "\n\n".join(parts)
 
 
 def _discriminated_union(action_types: list[type[Action]]) -> Any:

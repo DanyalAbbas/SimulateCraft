@@ -106,6 +106,8 @@ class MinecraftEnvironment(Environment):
         self._map_cache: dict[str, Any] | None = None
         self._map_size: int = 128
         self._map_origin: tuple[int, int] | None = None
+        self._home_xz: tuple[int, int] | None = None
+        self._map_pan_limit: int = 512
 
     # ------------------------------------------------------------------
     # Agent / bot registration
@@ -281,6 +283,7 @@ class MinecraftEnvironment(Environment):
             self._obs_cache.clear()
         self._map_cache = None
         self._map_origin = None
+        self._home_xz = None
         for k in self._last_rewards:
             self._last_rewards[k] = 0.0
 
@@ -295,6 +298,8 @@ class MinecraftEnvironment(Environment):
             return
         cx = int(sum(xs) / len(xs))
         cz = int(sum(zs) / len(zs))
+        if self._home_xz is None:
+            self._home_xz = (cx, cz)
         origin = (cx - self._map_size // 2, cz - self._map_size // 2)
         # Skip rescan if the camera hasn't moved much and we already have a map.
         if (
@@ -305,12 +310,30 @@ class MinecraftEnvironment(Environment):
             and self._tick_count % 3 != 0
         ):
             return
-        bridge = next(iter(self._bridges.values()))
         try:
-            self._map_cache = await bridge.get_map(origin[0], origin[1], self._map_size)
-            self._map_origin = origin
+            await self.fetch_map(origin[0], origin[1], self._map_size)
         except Exception as exc:
             log.warning("map scan failed: %s", exc)
+
+    async def fetch_map(
+        self, origin_x: int, origin_z: int, size: int | None = None
+    ) -> dict[str, Any]:
+        """Scan a top-down map tile for the viewer (also used by WS pan requests)."""
+        if not self._bridges:
+            return {}
+        tile = max(16, min(int(size or self._map_size), 128))
+        ox = int(origin_x)
+        oz = int(origin_z)
+        if self._home_xz is not None:
+            hx, hz = self._home_xz
+            lim = self._map_pan_limit
+            ox = max(hx - lim, min(hx + lim - tile, ox))
+            oz = max(hz - lim, min(hz + lim - tile, oz))
+        bridge = next(iter(self._bridges.values()))
+        result = await bridge.get_map(ox, oz, tile)
+        self._map_cache = result
+        self._map_origin = (ox, oz)
+        return result
 
     def snapshot(self) -> Snapshot:
         """Top-down Minecraft map (surface blocks) plus agent markers in world XZ."""
@@ -344,6 +367,10 @@ class MinecraftEnvironment(Environment):
         height = int(world_map.get("height") or self._map_size)
         origin_x = world_map.get("origin_x", 0)
         origin_z = world_map.get("origin_z", 0)
+        if self._home_xz is not None:
+            home = list(self._home_xz)
+        else:
+            home = [origin_x + width // 2, origin_z + height // 2]
 
         return Snapshot(
             tick=self._tick_count,
@@ -355,6 +382,9 @@ class MinecraftEnvironment(Environment):
                 "width": width,
                 "height": height,
                 "origin_xz": [origin_x, origin_z],
+                "home_xz": home,
+                "pan_limit": self._map_pan_limit,
+                "tile_size": self._map_size,
                 "map": world_map,
             },
         )
