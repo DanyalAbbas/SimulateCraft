@@ -1,8 +1,7 @@
 """Auto-generate one MkDocs page per SimulateCraft Python module.
 
 Runs on every ``mkdocs build`` / ``mkdocs serve`` via the gen-files plugin.
-Editing docstrings in ``src/simulatecraft`` is enough to keep the API docs
-in sync — no hand-maintained reference pages.
+Edit docstrings under ``src/simulatecraft`` — no hand-written guide pages.
 """
 
 from __future__ import annotations
@@ -13,7 +12,6 @@ import mkdocs_gen_files
 
 PACKAGE = "simulatecraft"
 SRC = Path("src") / PACKAGE
-REF = Path("reference")
 
 NAV_LABELS = {
     "brains": "brains",
@@ -69,15 +67,14 @@ for path in sorted(SRC.rglob("*.py")):
     if parts[-1] == "__init__":
         parts = parts[:-1]
         if not parts:
-            # Root package is covered by the hand-written API landing page.
             continue
-        doc_path = REF.joinpath(*parts, "index.md")
+        doc_path = Path(*parts, "index.md")
         ident = ".".join((PACKAGE, *parts))
     else:
-        doc_path = REF.joinpath(*parts).with_suffix(".md")
+        doc_path = Path(*parts).with_suffix(".md")
         ident = ".".join((PACKAGE, *parts))
 
-    nav[tuple(_label(p) for p in parts)] = doc_path.relative_to(REF).as_posix()
+    nav[tuple(_label(p) for p in parts)] = doc_path.as_posix()
 
     with mkdocs_gen_files.open(doc_path, "w") as fd:
         fd.write(f"# `{ident}`\n\n")
@@ -85,27 +82,16 @@ for path in sorted(SRC.rglob("*.py")):
 
     mkdocs_gen_files.set_edit_path(doc_path, path)
 
-with mkdocs_gen_files.open(REF / "SUMMARY.md", "w") as nav_file:
+with mkdocs_gen_files.open("SUMMARY.md", "w") as nav_file:
     nav_file.writelines(nav.build_literate_nav())
 
-with mkdocs_gen_files.open(REF / "index.md", "w") as index:
+with mkdocs_gen_files.open("index.md", "w") as index:
     index.write(
-        """# API reference
+        f"""# SimulateCraft
 
-Every public module under `simulatecraft` is documented here. Pages are
-**generated from source** on each docs build — edit docstrings in
-`src/simulatecraft/`, then rebuild.
+Auto-generated API reference for `{PACKAGE}`. Edit module docstrings under
+`src/{PACKAGE}/` — this site rebuilds from source on every docs build.
 
-## Start here
-
-| Area | Modules |
-|---|---|
-| **Core loop** | [`Runner`](core/runner.md), [`Agent`](core/agent.md), [`Environment`](core/environment.md), [`Events`](core/events.md), [`Schemas`](core/schemas.md) |
-| **Minecraft** | [`MinecraftEnvironment`](minecraft/env.md), [`Actions`](minecraft/actions.md), [`Observations`](minecraft/observations.md), [`Bridge`](minecraft/connection.md) |
-| **Cognition** | [`LLMBrain`](brains/llm.md), [`MemoryStream`](memory/stream.md), [`Retriever`](memory/retrieval.md), [`Planner`](planning/planner.md), [`SkillRegistry`](skills/registry.md) |
-| **Viewer** | [`SimulationServer`](server/app.md), [`JsonlLogger`](viewers/log.md) |
-| **CLI / examples** | [`CLI`](cli.md), [`minecraft_explorer`](examples/minecraft_explorer/index.md) |
-
-Browse the full package tree in the left sidebar.
+Use the sidebar to open any module.
 """
     )
