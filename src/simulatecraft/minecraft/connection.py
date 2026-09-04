@@ -167,21 +167,21 @@ class MinecraftBridge:
                 "Example (Docker): docker run -d --name mc -p 25565:25565 "
                 "-e EULA=TRUE -e VERSION=1.21.4 itzg/minecraft-server"
             )
-        if "socketClosed" in reason or "Failed to verify" in reason:
+        if "socketClosed" in reason or "Failed to verify" in reason or "EPIPE" in reason:
             return (
-                f"Minecraft kicked the bot before spawn ({target}): {reason}.\n"
-                "This usually means the server is in online-mode and rejected an offline bot.\n"
-                "Recreate the Docker server with online-mode disabled:\n"
-                "  docker rm -f mc\n"
-                "  docker run -d --name mc -p 25565:25565 -e EULA=TRUE "
-                "-e VERSION=1.21.4 -e ONLINE_MODE=FALSE itzg/minecraft-server"
+                f"Minecraft closed the connection before spawn ({target}): {reason}.\n"
+                "Common causes:\n"
+                "  • World still generating (port open ≠ ready). Wait for "
+                "'Done (…)!' in `docker compose logs -f`, then retry.\n"
+                "  • online-mode kicks offline bots — use ONLINE_MODE=FALSE "
+                "(bundled docker-compose already does).\n"
+                "  • Unsupported protocol version — pin VERSION=1.21.4."
             )
+        if "PartialReadError" in reason or "unsupported" in reason.lower():
             return (
                 f"Mineflayer cannot speak this Minecraft version ({reason}).\n"
                 "Pin the server to a supported release, e.g. 1.21.4:\n"
-                "  docker rm -f mc\n"
-                "  docker run -d --name mc -p 25565:25565 -e EULA=TRUE "
-                "-e VERSION=1.21.4 itzg/minecraft-server"
+                "  docker compose down && docker compose up -d"
             )
         return f"Minecraft bot failed before spawn ({target}): {reason}"
 

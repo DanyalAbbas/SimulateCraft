@@ -60,33 +60,69 @@ def setup_node() -> None:
     _run([npm, "install"], cwd=BOT_DIR)
 
 
+def _docker_container_health(docker: str, container: str = "simulatecraft-mc") -> str | None:
+    fmt = "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}"
+    try:
+        result = subprocess.run(
+            [docker, "inspect", "--format", fmt, container],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    return (result.stdout or "").strip() or None
+
+
+def _minecraft_logs_ready(docker: str, container: str = "simulatecraft-mc") -> bool:
+    """True once the vanilla server prints Done (port open is not enough)."""
+    try:
+        result = subprocess.run(
+            [docker, "logs", container],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return False
+    text = f"{result.stdout}\n{result.stderr}"
+    return "Done (" in text or "RCON running on" in text
+
+
 def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
     if skip:
         print(f"Skipping Docker; expecting a server at {host}:{port}")
-        return
-    if _port_open(host, port):
-        print(f"Minecraft already listening on {host}:{port}")
         return
     docker = _need(
         "docker",
         "Install Docker Desktop / Docker Engine, or start your own Minecraft Java 1.21.4 server\n"
         "and re-run with: ./run.sh --no-docker",
     )
-    compose = [docker, "compose", "-f", str(COMPOSE_FILE), "up", "-d"]
-    if not COMPOSE_FILE.exists():
-        sys.exit(f"Missing {COMPOSE_FILE}")
-    print("Starting Minecraft 1.21.4 (offline mode) via Docker…")
-    _run(compose)
+    if _port_open(host, port):
+        print(f"Minecraft already listening on {host}:{port}")
+    else:
+        if not COMPOSE_FILE.exists():
+            sys.exit(f"Missing {COMPOSE_FILE}")
+        print("Starting Minecraft 1.21.4 (offline mode) via Docker…")
+        _run([docker, "compose", "-f", str(COMPOSE_FILE), "up", "-d"])
+
     print("Waiting for the server to finish generating the world (first boot can take 1–2 min)…")
-    deadline = time.time() + 180
+    deadline = time.time() + 240
     while time.time() < deadline:
-        if _port_open(host, port):
-            # Give the process a few extra seconds after the port opens.
-            time.sleep(4)
+        health = _docker_container_health(docker)
+        ready = health == "healthy" or _minecraft_logs_ready(docker)
+        if ready:
+            time.sleep(2)
             print("Minecraft is up.")
             return
         time.sleep(2)
-    sys.exit(f"Minecraft did not open {host}:{port} in time.\nCheck: docker compose logs -f")
+    sys.exit(
+        f"Minecraft did not become ready at {host}:{port} in time.\n"
+        "Check: docker compose logs -f\n"
+        'Look for a line like: Done (…)! For help, type "help"'
+    )
 
 
 def require_llm_key() -> None:
