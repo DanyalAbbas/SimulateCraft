@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ from ..core.events import (
     TickCompleted,
 )
 from ..core.runner import Runner
+from .agents import AgentCreateRequest, AgentCreateResponse, create_agent, delete_agent
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +104,31 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
     async def chat(text: str, target: str | None = None, sender: str = "human") -> dict[str, str]:
         runner.bus.publish_inbound(HumanChat(sender=sender, target_agent_id=target, text=text))
         return {"ok": "sent"}
+
+    @app.get("/api/agents")
+    async def list_agents() -> dict[str, Any]:
+        snap = full_state().snapshot
+        return {"agents": snap.get("agents") or {}}
+
+    @app.post("/api/agents")
+    async def post_agent(body: AgentCreateRequest) -> AgentCreateResponse:
+        try:
+            return await create_agent(runner, body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("agent create failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.delete("/api/agents/{agent_id}")
+    async def remove_agent(agent_id: str) -> dict[str, Any]:
+        try:
+            return await delete_agent(runner, agent_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("agent delete failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
@@ -196,6 +222,16 @@ async def _handle_client_message(
         map_data = await fetch(origin_x, origin_z, size)
         if ws is not None:
             await ws.send_text(json.dumps({"type": "map", "map": map_data}))
+    elif msg_type == "agent_create":
+        req = AgentCreateRequest.model_validate(message.get("agent") or message)
+        created = await create_agent(runner, req)
+        if ws is not None:
+            await ws.send_text(json.dumps({"type": "agent_created", **created.model_dump()}))
+    elif msg_type == "agent_delete":
+        agent_id = str(message["agent_id"])
+        deleted = await delete_agent(runner, agent_id)
+        if ws is not None:
+            await ws.send_text(json.dumps({"type": "agent_deleted", **deleted}))
     else:
         raise ValueError(f"unknown inbound type {msg_type!r}")
 

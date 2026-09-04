@@ -4,12 +4,16 @@ services:
     container_name: simulatecraft-mc
     ports:
       - "25565:25565"
+      - "25575:25575"
     environment:
       EULA: "TRUE"
       VERSION: "1.21.4"
       ONLINE_MODE: "FALSE"
       MEMORY: "2G"
       TYPE: VANILLA
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: "simulatecraft"
     tty: true
     stdin_open: true
     restart: unless-stopped

@@ -43,7 +43,8 @@
       <div class="map-viewport" id="map-viewport">
         <canvas id="world" width="1024" height="1024" aria-label="Minecraft map"></canvas>
         <div id="map-overlay" class="map-overlay" hidden>Loading map…</div>
-        <div class="map-hint">Drag to pan · scroll to zoom · ±512 blocks from home</div>
+        <div class="map-hint">Drag to pan · scroll to zoom · click map to pin spawn (when Pin is on)</div>
+        <div id="spawn-pin" class="spawn-pin" hidden></div>
       </div>
 
       <div class="panel roster-panel" aria-label="Agents">
@@ -57,7 +58,58 @@
       </div>
     </section>
 
-    <aside class="rail panel" aria-label="Events and chat">
+    <aside class="rail panel" aria-label="Workshop, events and chat">
+      <details class="workshop" id="workshop" open>
+        <summary class="workshop-summary">Add agent</summary>
+        <form id="agent-form" class="agent-form">
+          <label>
+            Username
+            <input id="agent-username" name="username" type="text" maxlength="16" required placeholder="Steve" />
+          </label>
+          <label>
+            Goal
+            <input id="agent-goal" name="goal" type="text" maxlength="500" placeholder="build a shelter" />
+          </label>
+          <label>
+            System prompt / persona
+            <textarea id="agent-persona" name="persona" rows="4" maxlength="4000" placeholder="You are a careful builder who narrates in chat…"></textarea>
+          </label>
+          <label>
+            Extra instructions (optional)
+            <textarea id="agent-instructions" name="instructions" rows="2" maxlength="8000" placeholder="Prefer mining oak logs first…"></textarea>
+          </label>
+          <div class="spawn-row">
+            <span class="spawn-label">Spawn pin</span>
+            <button type="button" id="btn-pin" class="mc-btn" title="Click the map to set spawn XZ">Pin on map</button>
+            <span id="spawn-readout" class="spawn-readout">not set</span>
+          </div>
+          <div class="spawn-y-row">
+            <label>
+              Y
+              <input id="agent-spawn-y" name="spawn_y" type="number" step="1" value="64" />
+            </label>
+            <input id="agent-spawn-x" name="spawn_x" type="hidden" />
+            <input id="agent-spawn-z" name="spawn_z" type="hidden" />
+          </div>
+          <div class="role-row">
+            <label class="check"><input id="agent-op" type="checkbox" /> OP</label>
+            <label class="check"><input id="agent-spectator" type="checkbox" /> Spectator</label>
+            <label>
+              Gamemode
+              <select id="agent-gamemode">
+                <option value="">default</option>
+                <option value="survival">survival</option>
+                <option value="creative">creative</option>
+                <option value="adventure">adventure</option>
+                <option value="spectator">spectator</option>
+              </select>
+            </label>
+          </div>
+          <p id="agent-form-status" class="form-status" hidden></p>
+          <button type="submit" class="mc-btn mc-btn-green" id="btn-spawn-agent">Spawn agent</button>
+        </form>
+      </details>
+
       <div class="panel-title rail-title">
         <h2>Chat &amp; events</h2>
         <div class="filters" role="tablist" aria-label="Filter events">

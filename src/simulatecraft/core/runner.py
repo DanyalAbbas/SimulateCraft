@@ -74,6 +74,13 @@ class Runner:
         self.agents.append(agent)
         self.environment.register_agent(agent.id)
 
+    def remove_agent(self, agent_id: str) -> bool:
+        """Remove an agent from the runner (does not disconnect Minecraft)."""
+        before = len(self.agents)
+        self.agents = [a for a in self.agents if a.id != agent_id]
+        self._known_ids.discard(agent_id)
+        return len(self.agents) < before
+
     def get_agent(self, agent_id: str) -> Agent | None:
         return next((a for a in self.agents if a.id == agent_id), None)
 

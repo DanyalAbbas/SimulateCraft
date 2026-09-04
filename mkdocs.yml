@@ -12,21 +12,22 @@ site_dir: site
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
     - scheme: slate
-      primary: teal
-      accent: light green
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Light mode
     - scheme: default
-      primary: teal
-      accent: light green
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Dark mode
   font:
-    text: Outfit
+    text: Figtree
     code: IBM Plex Mono
   features:
     - navigation.sections
@@ -38,6 +39,14 @@ theme:
     - search.highlight
     - content.code.copy
     - toc.follow
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/DanyalAbbas/SimulateCraft
 
 plugins:
   - search

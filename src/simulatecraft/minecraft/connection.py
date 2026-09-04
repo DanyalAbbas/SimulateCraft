@@ -271,6 +271,23 @@ class MinecraftBridge:
     async def get_map(self, origin_x: int, origin_z: int, size: int = 128) -> dict[str, Any]:
         return await self.call("get_map", origin_x=origin_x, origin_z=origin_z, size=size)
 
+    async def configure_presence(
+        self,
+        *,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        gamemode: str | None = None,
+    ) -> dict[str, Any]:
+        """Teleport / set gamemode after spawn (bot must be OP for chat commands)."""
+        return await self.call(
+            "configure_presence",
+            x=x,
+            y=y,
+            z=z,
+            gamemode=gamemode,
+        )
+
     # ------------------------------------------------------------------
     # Event subscription (push events from Node → Python)
     # ------------------------------------------------------------------

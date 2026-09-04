@@ -22,6 +22,7 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -53,12 +54,24 @@ class AgentBotConfig:
         ipc_port: int = 25570,
         auth: str = "offline",
         goal: str = "",
+        spawn_x: float | None = None,
+        spawn_y: float | None = None,
+        spawn_z: float | None = None,
+        gamemode: str | None = None,
+        op: bool = False,
+        persona: str = "",
     ) -> None:
         self.username = username
         self.password = password
         self.ipc_port = ipc_port
         self.auth = auth
         self.goal = goal
+        self.spawn_x = spawn_x
+        self.spawn_y = spawn_y
+        self.spawn_z = spawn_z
+        self.gamemode = gamemode
+        self.op = op
+        self.persona = persona
 
 
 class MinecraftEnvironment(Environment):
@@ -122,24 +135,45 @@ class MinecraftEnvironment(Environment):
         ipc_port: int | None = None,
         auth: str = "offline",
         goal: str = "",
+        spawn_x: float | None = None,
+        spawn_y: float | None = None,
+        spawn_z: float | None = None,
+        gamemode: str | None = None,
+        op: bool = False,
+        persona: str = "",
     ) -> None:
         """Register an agent and configure its bot.
 
-        Call this before ``connect()`` / ``async with env:``.
-        ``ipc_port`` defaults to 25570 + index so multiple bots don't clash.
+        Call before ``connect()``, or use :meth:`spawn_bot` to add one at runtime.
+        ``ipc_port`` defaults to the next free port starting at 25570.
         """
+        if agent_id in self._bot_configs:
+            raise ValueError(f"agent {agent_id!r} already registered")
         if ipc_port is None:
-            ipc_port = 25570 + len(self._bot_configs)
+            ipc_port = self._next_ipc_port()
         self._bot_configs[agent_id] = AgentBotConfig(
             username=username or agent_id,
             password=password,
             ipc_port=ipc_port,
             auth=auth,
             goal=goal,
+            spawn_x=spawn_x,
+            spawn_y=spawn_y,
+            spawn_z=spawn_z,
+            gamemode=gamemode,
+            op=op,
+            persona=persona,
         )
         self._chat_logs[agent_id] = []
         self._last_rewards[agent_id] = 0.0
         self.register_agent(agent_id)
+
+    def _next_ipc_port(self) -> int:
+        used = {cfg.ipc_port for cfg in self._bot_configs.values()}
+        port = 25570
+        while port in used:
+            port += 1
+        return port
 
     # ------------------------------------------------------------------
     # Lifecycle (async context manager)
@@ -184,7 +218,96 @@ class MinecraftEnvironment(Environment):
         bridge.on_event("chat", _on_chat)
         await bridge.connect()
         self._bridges[agent_id] = bridge
+        await self._apply_presence(agent_id, bridge, cfg)
         log.info("Bot for agent '%s' (%s) connected.", agent_id, cfg.username)
+
+    async def spawn_bot(
+        self,
+        agent_id: str,
+        *,
+        username: str | None = None,
+        password: str = "",
+        auth: str = "offline",
+        goal: str = "",
+        spawn_x: float | None = None,
+        spawn_y: float | None = None,
+        spawn_z: float | None = None,
+        gamemode: str | None = None,
+        op: bool = False,
+        persona: str = "",
+    ) -> None:
+        """Register and connect a bot while the environment is already running."""
+        self.add_bot(
+            agent_id,
+            username=username,
+            password=password,
+            auth=auth,
+            goal=goal,
+            spawn_x=spawn_x,
+            spawn_y=spawn_y,
+            spawn_z=spawn_z,
+            gamemode=gamemode,
+            op=op,
+            persona=persona,
+        )
+        try:
+            await self._connect_one(agent_id)
+            await self._fetch_all_states()
+        except Exception:
+            await self.despawn_bot(agent_id)
+            raise
+
+    async def despawn_bot(self, agent_id: str) -> None:
+        """Disconnect one bot and forget its registration."""
+        bridge = self._bridges.pop(agent_id, None)
+        if bridge is not None:
+            with contextlib.suppress(Exception):
+                await bridge.close()
+        self._bot_configs.pop(agent_id, None)
+        self._chat_logs.pop(agent_id, None)
+        self._last_rewards.pop(agent_id, None)
+        cache = getattr(self, "_obs_cache", None)
+        if isinstance(cache, dict):
+            cache.pop(agent_id, None)
+        self.unregister_agent(agent_id)
+
+    async def _apply_presence(
+        self, agent_id: str, bridge: MinecraftBridge, cfg: AgentBotConfig
+    ) -> None:
+        """OP / teleport / gamemode via RCON (preferred) then bot-side fallback."""
+        commands: list[str] = []
+        if cfg.op:
+            commands.append(f"op {cfg.username}")
+        if cfg.spawn_x is not None and cfg.spawn_y is not None and cfg.spawn_z is not None:
+            commands.append(
+                f"tp {cfg.username} {cfg.spawn_x:.2f} {cfg.spawn_y:.2f} {cfg.spawn_z:.2f}"
+            )
+        if cfg.gamemode:
+            mode = cfg.gamemode.strip().lower()
+            if mode in {"survival", "creative", "adventure", "spectator"}:
+                commands.append(f"gamemode {mode} {cfg.username}")
+
+        if commands:
+            try:
+                from .rcon import run_commands
+
+                run_commands(commands)
+            except Exception as exc:
+                log.warning(
+                    "RCON presence setup for '%s' failed (%s); trying bot chat fallback",
+                    agent_id,
+                    exc,
+                )
+
+        try:
+            await bridge.configure_presence(
+                x=cfg.spawn_x,
+                y=cfg.spawn_y,
+                z=cfg.spawn_z,
+                gamemode=cfg.gamemode,
+            )
+        except Exception as exc:
+            log.warning("Bot presence configure for '%s' failed: %s", agent_id, exc)
 
     async def close(self) -> None:
         """Disconnect all bots gracefully."""
@@ -354,12 +477,18 @@ class MinecraftEnvironment(Environment):
                     "goal": obs.current_goal,
                     "biome": obs.biome,
                     "yaw": obs.yaw,
+                    "persona": cfg.persona if cfg else "",
+                    "gamemode": cfg.gamemode if cfg else obs.stats.game_mode,
+                    "op": bool(cfg.op) if cfg else False,
                 }
             else:
                 agents[aid] = {
                     "position": [0.0, 0.0],
                     "name": cfg.username if cfg else aid,
                     "goal": cfg.goal if cfg else "",
+                    "persona": cfg.persona if cfg else "",
+                    "gamemode": cfg.gamemode if cfg else None,
+                    "op": bool(cfg.op) if cfg else False,
                 }
 
         world_map = self._map_cache or {}

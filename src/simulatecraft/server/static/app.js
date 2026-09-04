@@ -35,6 +35,8 @@ let tiles = new Map(); // "ox,oz" -> {canvas, origin_x, origin_z, width, height}
 let pendingTiles = new Set();
 let drag = null;
 let needsDraw = true;
+let pinMode = false;
+let spawnPin = { x: null, z: null };
 
 function setMapLoading(loading) {
   if (!mapOverlay) return;
@@ -65,6 +67,12 @@ function connect() {
     if (data.type === "event") handleEvent(data.event);
     else if (data.type === "state") applyState(data.state);
     else if (data.type === "map") ingestMap(data.map);
+    else if (data.type === "agent_created") {
+      setAgentFormStatus(`Spawned ${data.username} (${data.agent_id})`, false);
+      addLogEntry(`spawned ${esc(data.agent_id)}`, -1, "system");
+    } else if (data.type === "agent_deleted") {
+      addLogEntry(`removed ${esc(data.agent_id)}`, -1, "system");
+    }
   };
 }
 
@@ -305,6 +313,7 @@ function draw() {
     drawAgents(latestState);
   }
 
+  updateSpawnPinMarker();
   requestAnimationFrame(draw);
 }
 
@@ -365,7 +374,7 @@ function updateHud(state) {
   const entries = Object.entries(agents);
   if (agentCountEl) agentCountEl.textContent = String(entries.length);
   if (!entries.length) {
-    hudEl.innerHTML = '<p class="empty">No agents yet.</p>';
+    hudEl.innerHTML = '<p class="empty">No agents yet — use Add agent.</p>';
     return;
   }
   hudEl.innerHTML = entries
@@ -376,20 +385,31 @@ function updateHud(state) {
         : "—";
       const health = info.health != null ? meter("health", "HP", info.health) : "";
       const food = info.food != null ? meter("food", "Food", info.food) : "";
+      const badges = [];
+      if (info.op) badges.push("OP");
+      if (info.gamemode) badges.push(String(info.gamemode));
+      const badgeHtml = badges.length
+        ? `<div class="agent-badges">${badges.map((b) => `<span class="badge">${esc(b)}</span>`).join("")}</div>`
+        : "";
       const holding = info.holding ? `Holding ${esc(info.holding)}` : "";
       const goal = info.goal ? `Goal · ${esc(info.goal)}` : "";
       const meta = [holding, goal].filter(Boolean).join(" · ");
       return `
-        <article class="agent-row">
+        <article class="agent-row" data-agent-id="${esc(id)}">
           <div class="agent-main">
             <div class="agent-name">${esc(info.name || id)}</div>
             <div class="agent-pos">${esc(pos)}</div>
+            ${badgeHtml}
           </div>
           <div class="agent-stats">${health}${food}</div>
           ${meta ? `<div class="agent-meta">${meta}</div>` : ""}
+          <button type="button" class="mc-btn agent-remove" data-remove="${esc(id)}" title="Remove agent">×</button>
         </article>`;
     })
     .join("");
+  hudEl.querySelectorAll("[data-remove]").forEach((btn) => {
+    btn.onclick = () => removeAgent(btn.getAttribute("data-remove"));
+  });
 }
 
 function updateAgentList(state) {
@@ -520,6 +540,14 @@ function pointerToCanvas(evt) {
 
 viewport.addEventListener("pointerdown", (evt) => {
   if (evt.button !== 0) return;
+  if (pinMode) {
+    const [sx, sy] = pointerToCanvas(evt);
+    const [wx, wz] = screenToWorld(sx, sy);
+    setSpawnPin(wx, wz);
+    setPinMode(false);
+    evt.preventDefault();
+    return;
+  }
   viewport.setPointerCapture(evt.pointerId);
   const [sx, sy] = pointerToCanvas(evt);
   drag = { sx, sy, camX: camera.x, camZ: camera.z };
@@ -593,6 +621,116 @@ document.getElementById("chat-form").onsubmit = (e) => {
   input.value = "";
 };
 
+const pinBtn = document.getElementById("btn-pin");
+const spawnReadout = document.getElementById("spawn-readout");
+const spawnPinEl = document.getElementById("spawn-pin");
+const agentForm = document.getElementById("agent-form");
+const agentFormStatus = document.getElementById("agent-form-status");
+
+function setPinMode(on) {
+  pinMode = on;
+  if (pinBtn) pinBtn.classList.toggle("is-active", on);
+  if (viewport) viewport.classList.toggle("is-pinning", on);
+  if (on) setFollow(false);
+}
+
+function setSpawnPin(x, z) {
+  spawnPin = { x: Math.round(x), z: Math.round(z) };
+  const sx = document.getElementById("agent-spawn-x");
+  const sz = document.getElementById("agent-spawn-z");
+  if (sx) sx.value = String(spawnPin.x);
+  if (sz) sz.value = String(spawnPin.z);
+  if (spawnReadout) spawnReadout.textContent = `${spawnPin.x}, ${spawnPin.z}`;
+  updateSpawnPinMarker();
+}
+
+function updateSpawnPinMarker() {
+  if (!spawnPinEl) return;
+  if (spawnPin.x == null || spawnPin.z == null) {
+    spawnPinEl.hidden = true;
+    return;
+  }
+  const [sx, sy] = worldToScreen(spawnPin.x, spawnPin.z);
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = rect.width / canvas.width;
+  const scaleY = rect.height / canvas.height;
+  spawnPinEl.hidden = false;
+  spawnPinEl.style.left = `${sx * scaleX}px`;
+  spawnPinEl.style.top = `${sy * scaleY}px`;
+}
+
+function setAgentFormStatus(text, isError) {
+  if (!agentFormStatus) return;
+  if (!text) {
+    agentFormStatus.hidden = true;
+    return;
+  }
+  agentFormStatus.hidden = false;
+  agentFormStatus.textContent = text;
+  agentFormStatus.classList.toggle("is-error", !!isError);
+}
+
+async function removeAgent(agentId) {
+  if (!agentId) return;
+  try {
+    const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || res.statusText);
+    }
+  } catch (err) {
+    addLogEntry(`remove failed: ${esc(err.message || err)}`, -1, "error system");
+  }
+}
+
+if (pinBtn) {
+  pinBtn.onclick = () => setPinMode(!pinMode);
+}
+
+if (agentForm) {
+  agentForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const username = document.getElementById("agent-username").value.trim();
+    if (!username) return;
+    const persona = document.getElementById("agent-persona").value.trim();
+    const instructions = document.getElementById("agent-instructions").value.trim();
+    const goal = document.getElementById("agent-goal").value.trim() || "survive and explore";
+    const spawnY = Number(document.getElementById("agent-spawn-y").value);
+    const payload = {
+      username,
+      persona: persona || `You are ${username}, a Minecraft adventurer.`,
+      goal,
+      op: document.getElementById("agent-op").checked,
+      spectator: document.getElementById("agent-spectator").checked,
+      gamemode: document.getElementById("agent-gamemode").value || null,
+    };
+    if (instructions) payload.instructions = instructions;
+    if (spawnPin.x != null && spawnPin.z != null) {
+      payload.spawn_x = spawnPin.x;
+      payload.spawn_y = Number.isFinite(spawnY) ? spawnY : 64;
+      payload.spawn_z = spawnPin.z;
+    }
+    const btn = document.getElementById("btn-spawn-agent");
+    if (btn) btn.disabled = true;
+    setAgentFormStatus("Spawning…", false);
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || res.statusText);
+      setAgentFormStatus(`Spawned ${body.username} (${body.agent_id})`, false);
+      document.getElementById("agent-username").value = "";
+    } catch (err) {
+      setAgentFormStatus(String(err.message || err), true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) {
     return;
@@ -605,6 +743,8 @@ window.addEventListener("keydown", (e) => {
     send({ type: "control", command: "step" });
   } else if (e.key.toLowerCase() === "f") {
     setFollow(!followAgents);
+  } else if (e.key === "Escape" && pinMode) {
+    setPinMode(false);
   }
 });
 

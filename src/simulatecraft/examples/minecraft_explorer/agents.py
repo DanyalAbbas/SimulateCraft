@@ -86,6 +86,46 @@ DEFENDER_PERSONA = (
 )
 
 
+def custom(
+    *,
+    persona: str,
+    goal: str,
+    model: str = "test",
+    instructions: str | None = None,
+) -> LLMBrain:
+    """Build an LLM brain from free-form frontend fields."""
+    memory = MemoryStream()
+    retriever = Retriever(memory, default_backend())
+    skills = SkillRegistry(persistence_path=".simulatecraft_skills.json")
+    planner = Planner(
+        generator=lambda _ctx: Plan(
+            goal=goal or "survive and explore",
+            steps=[
+                "Look around and assess the environment",
+                "Gather basic resources (wood, stone)",
+                "Craft essential tools",
+                "Explore and achieve the main goal",
+            ],
+        )
+    )
+    return LLMBrain(
+        action_types=ALL_ACTIONS,
+        persona=persona or "A Minecraft adventurer.",
+        model=model,
+        instructions=instructions,
+        config=LLMBrainConfig(
+            model=model if isinstance(model, str) else "test",
+            reflect_every=20,
+            memory_top_k=6,
+            retries=2,
+        ),
+        memory=memory,
+        retriever=retriever,
+        planner=planner,
+        skills=skills,
+    )
+
+
 def explorer(model: str = "test") -> LLMBrain:
     return _make_brain(EXPLORER_PERSONA, "explore as much of the world as possible", model)
 

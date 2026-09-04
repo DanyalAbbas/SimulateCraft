@@ -45,10 +45,27 @@ class StubEnvironment(Environment):
         self.positions: dict[str, list[float]] = {}
         self.last_actions: dict[str, Action] = {}
         self.exit_on_say: bool = False
+        self.bot_meta: dict[str, dict[str, Any]] = {}
 
     def register_agent(self, agent_id: str) -> None:
         super().register_agent(agent_id)
         self.positions.setdefault(agent_id, [0.0, 0.0, 0.0])
+
+    async def spawn_bot(self, agent_id: str, **kwargs: Any) -> None:
+        if agent_id in self._registered:
+            raise ValueError(f"agent {agent_id!r} already registered")
+        self.register_agent(agent_id)
+        x = kwargs.get("spawn_x")
+        y = kwargs.get("spawn_y")
+        z = kwargs.get("spawn_z")
+        if x is not None and y is not None and z is not None:
+            self.positions[agent_id] = [float(x), float(y), float(z)]
+        self.bot_meta[agent_id] = dict(kwargs)
+
+    async def despawn_bot(self, agent_id: str) -> None:
+        self.unregister_agent(agent_id)
+        self.positions.pop(agent_id, None)
+        self.bot_meta.pop(agent_id, None)
 
     def observe(self, agent_id: str) -> Observation:
         return Observation(

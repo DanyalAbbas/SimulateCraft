@@ -560,6 +560,151 @@ canvas {
 #chat-input::placeholder { color: #777; }
 .composer .mc-btn { width: 100%; min-width: 0; }
 
+.workshop {
+  margin: 0 0 10px;
+  border: 2px solid #111;
+  background: #2a2118;
+  box-shadow: inset 1px 1px 0 #5a4630;
+}
+
+.workshop-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 10px;
+  font-family: var(--font-pixel);
+  font-size: 0.95rem;
+  color: var(--gold);
+  background: #3a2a1a;
+  border-bottom: 2px solid #111;
+}
+
+.workshop-summary::-webkit-details-marker { display: none; }
+
+.agent-form {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.agent-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-form input[type="text"],
+.agent-form input[type="number"],
+.agent-form textarea,
+.agent-form select {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: #eee;
+  background: #1e1e1e;
+  border: 2px solid #111;
+  box-shadow: inset 1px 1px 0 #444;
+  padding: 6px 8px;
+  outline: none;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.agent-form textarea { resize: vertical; min-height: 64px; }
+.agent-form input:focus,
+.agent-form textarea:focus,
+.agent-form select:focus { border-color: var(--grass); }
+
+.spawn-row,
+.role-row,
+.spawn-y-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.spawn-label {
+  font-size: 0.72rem;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+.spawn-readout {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--gold);
+}
+
+.role-row .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: none;
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.role-row label:not(.check) {
+  flex: 1;
+  min-width: 120px;
+}
+
+.form-status {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--grass-light);
+}
+.form-status.is-error { color: #ff8a80; }
+
+.map-viewport.is-pinning { cursor: crosshair; }
+
+.spawn-pin {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -10px 0 0 -7px;
+  border: 2px solid #111;
+  background: var(--gold);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  pointer-events: none;
+  z-index: 4;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.agent-row {
+  position: relative;
+}
+
+.agent-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 28px;
+  padding: 2px 6px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.agent-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.badge {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border: 1px solid #111;
+  background: #3d5c28;
+  color: #dff0c8;
+  text-transform: uppercase;
+}
+
 @media (max-width: 960px) {
   :root { --rail-w: 100%; }
 

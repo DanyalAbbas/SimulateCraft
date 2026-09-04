@@ -75,3 +75,34 @@ def test_websocket_receives_events_and_accepts_chat(client: TestClient) -> None:
                 got_chat = True
                 break
         assert got_chat
+
+
+def test_create_and_delete_agent_via_rest(client: TestClient) -> None:
+    pytest.importorskip("pydantic_ai", reason="LLM extra not installed")
+    response = client.post(
+        "/api/agents",
+        json={
+            "username": "Bea",
+            "persona": "A careful builder.",
+            "goal": "build a hut",
+            "model": "test",
+            "spawn_x": 10,
+            "spawn_y": 64,
+            "spawn_z": -4,
+            "op": True,
+            "spectator": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ok"] is True
+    assert body["username"] == "Bea"
+    agent_id = body["agent_id"]
+
+    state = client.get("/api/state").json()
+    assert agent_id in state["snapshot"]["agents"]
+
+    deleted = client.delete(f"/api/agents/{agent_id}")
+    assert deleted.status_code == 200
+    state = client.get("/api/state").json()
+    assert agent_id not in state["snapshot"]["agents"]

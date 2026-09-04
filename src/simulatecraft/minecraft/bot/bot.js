@@ -467,6 +467,38 @@ async function handleRPC(msg) {
       break;
     }
 
+    case "configure_presence": {
+      const result = { ok: true, teleported: false, gamemode: null };
+      try {
+        if (params.x != null && params.y != null && params.z != null) {
+          await bot.chat(`/tp ${bot.username} ${params.x} ${params.y} ${params.z}`);
+          try {
+            bot.entity.position.set(Number(params.x), Number(params.y), Number(params.z));
+            bot._client.write("position", {
+              x: Number(params.x),
+              y: Number(params.y),
+              z: Number(params.z),
+              onGround: true,
+            });
+          } catch (_) { /* server may reject client-side move */ }
+          result.teleported = true;
+          await sleep(250);
+        }
+        if (params.gamemode) {
+          const mode = String(params.gamemode).toLowerCase();
+          if (["survival", "creative", "adventure", "spectator"].includes(mode)) {
+            await bot.chat(`/gamemode ${mode}`);
+            result.gamemode = mode;
+            await sleep(200);
+          }
+        }
+        sendResult(id, result);
+      } catch (err) {
+        sendResult(id, { ok: false, reason: String(err.message || err) });
+      }
+      break;
+    }
+
     // ---- Actions ----
     case "perform_action": {
       const action = params.action || {};

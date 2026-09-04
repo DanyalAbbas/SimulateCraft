@@ -20,6 +20,10 @@ echo 'GROQ_API_KEY=gsk_your_key' > .env
 # viewer → http://127.0.0.1:8000
 ```
 
+!!! tip "Live viewer workshop"
+    Open the viewer and use **Add agent** to spawn bots with a custom system
+    prompt, map spawn pin, OP, and spectator mode — no CLI restart needed.
+
 !!! tip "API docs stay in sync"
     The **API reference** section is rebuilt from live docstrings on every
     `mkdocs build`. Edit code under `src/simulatecraft/` — don’t hand-edit
