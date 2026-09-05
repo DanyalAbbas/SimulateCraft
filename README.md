@@ -23,13 +23,31 @@ LLM-powered agents that play Minecraft. Spawn bots with goals and personas, watc
 - Python **3.11+**
 - Node.js **18+**
 - Docker Desktop (optional — starts a local Minecraft **1.21.4** server)
-- An LLM key: [Groq](https://console.groq.com/keys), [OpenRouter](https://openrouter.ai/keys), or [9Router](https://9router.com/)
+- An LLM provider: [OpenRouter](https://openrouter.ai/keys), [9Router](https://9router.com/), or your own OpenAI-compatible API (Groq works briefly but rate-limits fast)
 
 ---
 
 ## Quick start
 
-### 1. Clone and add a key
+### One-line install
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.ps1 | iex
+```
+
+**macOS / Linux:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.sh | bash
+```
+
+Optional: set `OPENROUTER_API_KEY` (or `OPENAI_BASE_URL` + `OPENAI_API_KEY`) in the same shell before running. The installer clones into `~/SimulateCraft`, creates `.env`, installs tooling, and launches.
+
+### Manual install
+
+#### 1. Clone and add a key
 
 ```text
 git clone https://github.com/DanyalAbbas/SimulateCraft.git
@@ -39,12 +57,12 @@ cd SimulateCraft
 Copy `.env.example` to `.env` and set a key:
 
 ```text
-GROQ_API_KEY=gsk_your_key
+OPENROUTER_API_KEY=sk-or-your_key
 ```
 
-Get a free key at [console.groq.com/keys](https://console.groq.com/keys).
+Or use 9Router / your own API via `OPENAI_BASE_URL` + `OPENAI_API_KEY`. See [Connect an LLM](docs/llm-providers.md).
 
-### 2. Run (one command)
+#### 2. Run (one command)
 
 **Windows** (PowerShell or double-click `run.cmd`):
 
@@ -87,9 +105,10 @@ Put one of these in `.env`:
 
 | Provider | What to set |
 |---|---|
-| **Groq** (recommended) | `GROQ_API_KEY=gsk_...` |
 | **OpenRouter** | `OPENROUTER_API_KEY=sk-or-...` |
 | **9Router** (local) | `OPENAI_BASE_URL=http://localhost:20128/v1`<br>`OPENAI_API_KEY=<dashboard-key>`<br>`SIMULATECRAFT_MODEL=oc/mimo-v2.5-free` |
+| **Own API** | `OPENAI_BASE_URL=...`<br>`OPENAI_API_KEY=...` |
+| **Groq** (rate-limited) | `GROQ_API_KEY=gsk_...` |
 
 Optional: `SIMULATECRAFT_MODEL=...`
 
