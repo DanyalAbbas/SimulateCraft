@@ -91,3 +91,9 @@ uv run pytest
 ## License
 
 [MIT](LICENSE)
+
+
+<p align="center">
+  Created and Managed by:
+<p align="center">
+	<a href="https://github.com/DanyalAbbas"><img src="https://img.shields.io/badge/-Danyal%20Abbas-black%20?style=flat&logo=github&logoColor=white"/></a>
