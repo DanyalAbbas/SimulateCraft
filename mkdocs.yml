@@ -91,10 +91,11 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - LLM providers: llm-providers.md
-  - Architecture: architecture.md
-  - Live viewer: viewer.md
+  - Tutorials:
+      - First run: getting-started.md
+      - Connect an LLM: llm-providers.md
+      - Use the live viewer: viewer.md
+  - How it works: how-it-works.md
   - Contributing: contributing.md
   - API reference: reference/
 

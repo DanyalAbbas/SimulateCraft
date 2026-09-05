@@ -1,211 +1,101 @@
-# LLM providers
+# Connect an LLM
 
-SimulateCraft talks to models through [pydantic-ai](https://ai.pydantic.dev/).
-Set a model with `SIMULATECRAFT_MODEL`, or let [`resolve_model()`](reference/brains/llm.md)
-pick a free default from your environment.
+SimulateCraft needs a language model to decide each agent’s next action.
+Pick **one** path below and put it in `.env` at the repo root.
 
-**Auto-select order:** `SIMULATECRAFT_MODEL` → `GROQ_API_KEY` → `OPENROUTER_API_KEY` → offline `test`.
+Auto-select order when `SIMULATECRAFT_MODEL` is unset:
 
-Install the LLM extra once:
+1. `GROQ_API_KEY` → Groq default model  
+2. `OPENROUTER_API_KEY` → free OpenRouter Llama  
+3. Otherwise → offline `test` model (no real thinking)
+
+---
+
+## Option A — Groq (recommended)
+
+Fast free tier, good for agent tick loops.
+
+1. Create a key at [console.groq.com/keys](https://console.groq.com/keys).
+2. In `.env`:
 
 ```bash
-uv sync --extra llm
-# or: pip install 'simulatecraft[llm]'
+GROQ_API_KEY=gsk_...
+```
+
+3. Run `./run.sh`.
+
+Optional model override:
+
+```bash
+SIMULATECRAFT_MODEL=groq:openai/gpt-oss-120b
+# or a smaller/faster one:
+# SIMULATECRAFT_MODEL=groq:openai/gpt-oss-20b
 ```
 
 ---
 
-## OpenRouter
+## Option B — OpenRouter
 
-[OpenRouter](https://openrouter.ai) is a single API that routes to many providers.
-It has a free tier (rate-limited) and paid models.
-
-### Setup
+One key for many models, including free ones.
 
 1. Create a key at [openrouter.ai/keys](https://openrouter.ai/keys).
-2. Put it in `.env` at the repo root (or export it):
+2. In `.env`:
 
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-3. Run SimulateCraft — with no `SIMULATECRAFT_MODEL`, it auto-picks a free Llama model:
+3. Run `./run.sh` (auto-picks a free Llama model), or set a model:
 
 ```bash
-./run.sh
-# equivalent model string:
-# openrouter:meta-llama/llama-3.1-8b-instruct:free
+SIMULATECRAFT_MODEL=openrouter:meta-llama/llama-3.1-8b-instruct:free
+# browse free models: https://openrouter.ai/models?q=:free
 ```
 
-### Choose a model
-
-Prefix every OpenRouter id with `openrouter:`:
-
-```bash
-# Free examples — browse https://openrouter.ai/models?q=:free
-export SIMULATECRAFT_MODEL="openrouter:meta-llama/llama-3.1-8b-instruct:free"
-export SIMULATECRAFT_MODEL="openrouter:google/gemma-3-27b-it:free"
-export SIMULATECRAFT_MODEL="openrouter:mistralai/mistral-7b-instruct:free"
-
-# Paid examples
-export SIMULATECRAFT_MODEL="openrouter:anthropic/claude-sonnet-4.6"
-export SIMULATECRAFT_MODEL="openrouter:openai/gpt-4o-mini"
-```
-
-### How it works in code
-
-`openrouter:…` is built with pydantic-ai’s `OpenRouterModel` and reads
-`OPENROUTER_API_KEY` from the environment. Missing key → clear error pointing at
-the OpenRouter keys page.
-
-### Tips
-
-- Free models often throttle under multi-agent load; prefer Groq or 9Router for
-  faster tick loops.
-- Keep the key in `.env` — never commit it.
-- Credits / usage: [openrouter.ai/activity](https://openrouter.ai/activity).
+!!! note
+    Free OpenRouter models can rate-limit with several agents. Prefer Groq if ticks feel slow.
 
 ---
 
-## 9Router (OpenAI-compatible gateway)
+## Option C — 9Router (local gateway)
 
-[9Router](https://9router.com/) is a **local** OpenAI-compatible proxy
-([GitHub](https://github.com/decolua/9router)). It sits between SimulateCraft and
-40+ backends, with routing, fallback, and token-saving features.
-
-Default local endpoint:
-
-| | |
-|---|---|
-| Dashboard | `http://localhost:20128` |
-| OpenAI API base | `http://localhost:20128/v1` |
-
-### Setup
-
-1. Install and start 9Router (see [9router.com](https://9router.com/) or the
-   [decolua/9router](https://github.com/decolua/9router) README).
-2. Open the dashboard, connect a provider, and copy the **local API key**.
-3. Configure SimulateCraft:
+[9Router](https://9router.com/) is a local OpenAI-compatible proxy. Start it first
+(dashboard usually at `http://localhost:20128`), then point SimulateCraft at it:
 
 ```bash
-# .env
 OPENAI_BASE_URL=http://localhost:20128/v1
 OPENAI_API_KEY=<key from 9Router dashboard>
 SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
 ```
 
-Model ids are whatever 9Router exposes (often prefixed), for example:
+Model ids come from the 9Router dashboard / `GET /v1/models` (e.g. `kr/...`, `oc/...`).
 
-| Example id | Typical route |
-|---|---|
-| `oc/mimo-v2.5-free` | OpenCode / free-tier combo |
-| `kr/claude-sonnet-4.5` | Kiro-routed Claude |
-| `cc/claude-opus-4-7` | Claude Code route |
-
-List models from the gateway:
+Check the gateway:
 
 ```bash
 curl -s http://localhost:20128/v1/models \
-  -H "Authorization: Bearer $OPENAI_API_KEY" | head
+  -H "Authorization: Bearer $OPENAI_API_KEY"
 ```
 
-Then:
+---
+
+## Option D — Offline (no key)
+
+For wiring tests only — agents use canned responses:
 
 ```bash
-./run.sh
-# or
-uv run simulatecraft --model oc/mimo-v2.5-free
+SIMULATECRAFT_MODEL=test
 ```
 
-### Explicit model strings
+---
 
-When `OPENAI_BASE_URL` is set, bare ids (anything that is not a native provider
-prefix like `groq:` / `openrouter:`) use chat-completions against that base URL.
-You can also be explicit:
-
-```bash
-export SIMULATECRAFT_MODEL="openai-compatible:oc/mimo-v2.5-free"
-export SIMULATECRAFT_MODEL="openai:oc/mimo-v2.5-free"   # also uses OPENAI_BASE_URL
-```
-
-!!! note "Chat Completions, not Responses"
-    Local gateways usually implement `/v1/chat/completions`. SimulateCraft routes
-    these models through pydantic-ai’s OpenAI **chat** client so 9Router / LiteLLM /
-    vLLM work without the Responses API.
-
-### Troubleshooting
+## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `OPENAI_BASE_URL is not set` | Export the base URL including `/v1` |
-| Connection refused | Start 9Router; confirm `curl http://localhost:20128/v1/models` |
-| 401 / invalid key | Paste the key from the 9Router dashboard into `OPENAI_API_KEY` |
-| Model not found | Pick an id from `/v1/models` or the dashboard |
-| `./run.sh` says no LLM key | Set `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `SIMULATECRAFT_MODEL` |
+| Script exits “No LLM key” | Set Groq/OpenRouter/9Router vars in `.env` |
+| OpenRouter auth error | Key must look like `sk-or-...` |
+| 9Router connection refused | Start 9Router; base URL must include `/v1` |
+| Agents barely chat / act slowly | Switch to Groq or a paid model; free tiers throttle |
 
-Same pattern works for other OpenAI-compatible servers (LiteLLM, vLLM, LocalAI,
-Ollama’s OpenAI shim) — only the base URL and model id change.
-
----
-
-## Groq (fast free tier)
-
-```bash
-# https://console.groq.com/keys
-GROQ_API_KEY=gsk_...
-# optional override:
-SIMULATECRAFT_MODEL=groq:openai/gpt-oss-120b
-```
-
-Good default for agent tick loops (low latency).
-
----
-
-## Direct cloud providers
-
-```bash
-export SIMULATECRAFT_MODEL="anthropic:claude-sonnet-4-5"   # ANTHROPIC_API_KEY
-export SIMULATECRAFT_MODEL="openai:gpt-4o-mini"            # OPENAI_API_KEY (official API)
-export SIMULATECRAFT_MODEL="google-gla:gemini-2.0-flash"   # GOOGLE_API_KEY
-```
-
-If both `OPENAI_BASE_URL` and an official OpenAI key are set, `openai:…` is sent
-to the **gateway**. Unset `OPENAI_BASE_URL` to hit OpenAI directly.
-
----
-
-## Offline / CI
-
-```bash
-export SIMULATECRAFT_MODEL=test
-```
-
-Uses pydantic-ai’s `TestModel` (no network). Useful for wiring tests without keys.
-
----
-
-## Environment cheat sheet
-
-| Variable | Purpose |
-|---|---|
-| `SIMULATECRAFT_MODEL` | Full model string (wins over auto-select) |
-| `GROQ_API_KEY` | Auto → `groq:openai/gpt-oss-120b` |
-| `OPENROUTER_API_KEY` | Auto → free OpenRouter Llama |
-| `OPENAI_BASE_URL` | OpenAI-compatible gateway (e.g. 9Router) |
-| `OPENAI_API_KEY` | Key for that gateway (or official OpenAI) |
-| `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` | Direct providers |
-
-Example `.env` for OpenRouter:
-
-```bash
-OPENROUTER_API_KEY=sk-or-v1-...
-# SIMULATECRAFT_MODEL=openrouter:google/gemma-3-27b-it:free
-```
-
-Example `.env` for 9Router:
-
-```bash
-OPENAI_BASE_URL=http://localhost:20128/v1
-OPENAI_API_KEY=your-9router-dashboard-key
-SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
-```
+Next: [Use the live viewer](viewer.md)
