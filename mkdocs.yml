@@ -13,6 +13,8 @@ site_dir: site
 theme:
   name: material
   custom_dir: docs/overrides
+  favicon: assets/icon.png
+  logo: assets/icon.png
   palette:
     - scheme: slate
       primary: custom

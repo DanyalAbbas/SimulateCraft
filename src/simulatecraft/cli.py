@@ -98,7 +98,7 @@ def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
     docker = _need(
         "docker",
         "Install Docker Desktop / Docker Engine, or start your own Minecraft Java 1.21.4 server\n"
-        "and re-run with: ./run.sh --no-docker",
+        "and re-run with: ./run.sh --no-docker   (Windows: .\\run.ps1 --no-docker)",
     )
     if _port_open(host, port):
         print(f"Minecraft already listening on {host}:{port}")
@@ -141,8 +141,12 @@ def require_llm_key() -> None:
         "1. Get a free Groq key (30 seconds, no credit card):\n"
         "     https://console.groq.com/keys\n"
         "2. Put it in a .env file in this folder:\n"
-        "     echo 'GROQ_API_KEY=gsk_your_key' > .env\n"
-        "3. Run ./run.sh again.\n\n"
+        "     GROQ_API_KEY=gsk_your_key\n"
+        "   (copy .env.example → .env, then edit)\n"
+        "3. Run again:\n"
+        "     ./run.sh          # macOS / Linux\n"
+        "     .\\run.ps1        # Windows PowerShell\n"
+        "     run.cmd          # Windows double-click / cmd\n\n"
         "Or point at an OpenAI-compatible gateway (e.g. 9Router):\n"
         "     OPENAI_BASE_URL=http://localhost:20128/v1\n"
         "     OPENAI_API_KEY=<dashboard-key>\n"

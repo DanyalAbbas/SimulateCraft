@@ -22,36 +22,62 @@ LLM-powered agents that play Minecraft. Spawn bots with goals and personas, watc
 
 - Python **3.11+**
 - Node.js **18+**
-- Docker (optional — starts a local Minecraft **1.21.4** server)
+- Docker Desktop (optional — starts a local Minecraft **1.21.4** server)
 - An LLM key: [Groq](https://console.groq.com/keys), [OpenRouter](https://openrouter.ai/keys), or [9Router](https://9router.com/)
 
 ---
 
 ## Quick start
 
-1. Clone the repo and create a `.env` file (see [`.env.example`](.env.example)):
+### 1. Clone and add a key
 
-```bash
-# Fast free tier — https://console.groq.com/keys
-echo 'GROQ_API_KEY=gsk_your_key' > .env
+```text
+git clone https://github.com/DanyalAbbas/SimulateCraft.git
+cd SimulateCraft
 ```
 
-2. Run:
+Copy `.env.example` to `.env` and set a key:
+
+```text
+GROQ_API_KEY=gsk_your_key
+```
+
+Get a free key at [console.groq.com/keys](https://console.groq.com/keys).
+
+### 2. Run (one command)
+
+**Windows** (PowerShell or double-click `run.cmd`):
+
+```powershell
+.\run.ps1
+```
+
+**macOS / Linux:**
 
 ```bash
 chmod +x run.sh
 ./run.sh
 ```
 
-3. Open the viewer at [http://127.0.0.1:8000](http://127.0.0.1:8000) and join `localhost` in Minecraft Java **1.21.4**.
+### 3. Open and play
+
+1. Viewer → [http://127.0.0.1:8000](http://127.0.0.1:8000)
+2. Minecraft Java **1.21.4** → Multiplayer → `localhost`
 
 Already have a Minecraft server?
 
-```bash
+```powershell
+# Windows
+.\run.ps1 --no-docker --host localhost --port 25565
+
+# macOS / Linux
 ./run.sh --no-docker --host localhost --port 25565
 ```
 
-`./run.sh` installs Python/Node deps, starts Minecraft (unless `--no-docker`), and launches the agents + viewer.
+The launcher installs Python packages (`uv`), Mineflayer (`npm`), starts Minecraft via Docker (unless `--no-docker`), then opens the agents + viewer.
+
+If PowerShell blocks scripts, double-click **`run.cmd`** instead, or run once:
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 
 ---
 
@@ -65,28 +91,19 @@ Put one of these in `.env`:
 | **OpenRouter** | `OPENROUTER_API_KEY=sk-or-...` |
 | **9Router** (local) | `OPENAI_BASE_URL=http://localhost:20128/v1`<br>`OPENAI_API_KEY=<dashboard-key>`<br>`SIMULATECRAFT_MODEL=oc/mimo-v2.5-free` |
 
-Optional model override: `SIMULATECRAFT_MODEL=...`
+Optional: `SIMULATECRAFT_MODEL=...`
 
-Full details: [LLM providers](docs/llm-providers.md) · [Docs site](https://danyalabbas.github.io/SimulateCraft/)
+More detail: [Connect an LLM](docs/llm-providers.md) · [Docs site](https://danyalabbas.github.io/SimulateCraft/)
 
 ---
 
-## Docs & contributing
-
-Tutorials (readable how-tos):
+## Docs
 
 - [First run](docs/getting-started.md)
 - [Connect an LLM](docs/llm-providers.md)
 - [Use the live viewer](docs/viewer.md)
 - [How it works](docs/how-it-works.md)
 - [Contributing](docs/contributing.md)
-
-Published site: [danyalabbas.github.io/SimulateCraft](https://danyalabbas.github.io/SimulateCraft/)
-
-```bash
-uv sync --extra llm --extra dev
-uv run pytest
-```
 
 ## License
 
