@@ -1,12 +1,18 @@
-# SimulateCraft
-
 <p align="center">
   <img src="assets/cover.png" alt="SimulateCraft — LLM agents in Minecraft" width="100%" />
 </p>
 
-[![CI](https://github.com/DanyalAbbas/SimulateCraft/actions/workflows/ci.yml/badge.svg)](https://github.com/DanyalAbbas/SimulateCraft/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://danyalabbas.github.io/SimulateCraft/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <a href="https://github.com/DanyalAbbas/SimulateCraft/actions/workflows/ci.yml">
+    <img src="https://github.com/DanyalAbbas/SimulateCraft/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  </a>
+  <a href="https://danyalabbas.github.io/SimulateCraft/">
+    <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Docs" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" />
+  </a>
+</p>
 
 LLM-powered agents that play Minecraft. Spawn bots with goals and personas, watch them on a live map, and chat with them from your browser.
 
