@@ -27,9 +27,7 @@ def test_agent_factories(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_build_and_unknown_agent() -> None:
-    env, runner = explorer_main.build(
-        "localhost", 25565, ["explorer", "builder"], "test", 1.0, 10
-    )
+    env, runner = explorer_main.build("localhost", 25565, ["explorer", "builder"], "test", 1.0, 10)
     assert set(env._bot_configs) == {"explorer", "builder"}
     assert {a.id for a in runner.agents} == {"explorer", "builder"}
     with pytest.raises(ValueError, match="Unknown agent"):

@@ -45,9 +45,7 @@ def test_observation_render_full() -> None:
         stats=BotStats(health=18, food=15, time_of_day=1000, is_raining=True),
         equipped_item="wooden_pickaxe",
         inventory=[InventoryItem(name=f"item{i}", count=i + 1) for i in range(14)],
-        nearby_blocks=[
-            NearbyBlock(name="oak_log", x=0, y=64, z=0) for _ in range(10)
-        ],
+        nearby_blocks=[NearbyBlock(name="oak_log", x=0, y=64, z=0) for _ in range(10)],
         nearby_entities=[
             NearbyEntity(name="zombie", entity_type="mob", x=1, y=64, z=1, distance=3.2)
             for _ in range(8)
