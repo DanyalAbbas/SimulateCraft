@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -67,7 +66,7 @@ async def test_call_success_and_timeout() -> None:
     async def resolve_later() -> None:
         await asyncio.sleep(0.01)
         # find pending and resolve
-        for req_id, fut in list(b._pending.items()):
+        for _req_id, fut in list(b._pending.items()):
             if not fut.done():
                 fut.set_result({"ok": True})
 

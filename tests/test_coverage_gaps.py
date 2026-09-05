@@ -12,7 +12,6 @@ import pytest
 from helpers import FixedAction, ScriptedBrain, StubEnvironment
 from simulatecraft.brains.llm import LLMBrain, LLMBrainConfig
 from simulatecraft.core import Agent, AgentState, HumanControl, Observation, Runner, RunnerConfig
-from simulatecraft.core.events import EventBus
 from simulatecraft.memory.reflection import ReflectionEngine
 from simulatecraft.memory.retrieval import Retriever, default_backend
 from simulatecraft.memory.stream import MemoryStream
@@ -74,61 +73,10 @@ def test_mine_nearest_render() -> None:
 def test_openrouter_import_error(monkeypatch: pytest.MonkeyPatch) -> None:
     import builtins
 
-    real_import = builtins.__import__
-
-    def fake_import(name: str, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
-        if "openrouter" in name:
-            raise ImportError("missing")
-        if fromlist and any("openrouter" in str(x) for x in fromlist):
-            # from pydantic_ai.models.openrouter import OpenRouterModel
-            mod_name = name
-            if "openrouter" in mod_name or (
-                name.startswith("pydantic_ai") and fromlist and "OpenRouter" in str(fromlist)
-            ):
-                raise ImportError("missing")
-        try:
-            return real_import(name, globals, locals, fromlist, level)
-        except ImportError:
-            raise
-
-    # More reliable: patch the import inside the function by raising when loading submodule
-    import types
-
-    fake_mod = types.ModuleType("pydantic_ai.models.openrouter")
-
-    def boom_getattr(name: str) -> Any:
-        raise ImportError("missing openrouter")
-
-    # Simplest path: monkeypatch _make_openrouter_model's import by replacing the function's dependency
     from simulatecraft.brains import llm as llm_mod
 
-    def raise_import(*a: Any, **k: Any) -> Any:
-        raise ImportError(
-            "OpenRouter support requires pydantic-ai[openrouter]. "
-            "Run: pip install 'pydantic-ai[openrouter]'"
-        )
+    real_import = builtins.__import__
 
-    # Force the try/except ImportError branch by making the import fail
-    import sys
-
-    class FakeLoader:
-        def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> None:
-            if "openrouter" in fullname:
-                raise ImportError("blocked")
-            return None
-
-    # Directly exercise by calling with patched importlib
-    import importlib
-
-    real = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None) -> Any:
-        if "openrouter" in name:
-            raise ImportError("no")
-        return real(name, package)
-
-    # The code uses `from pydantic_ai.models.openrouter import ...` not import_module.
-    # Patch builtins.__import__ carefully:
     def selective_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
         if name in {"pydantic_ai.models.openrouter", "pydantic_ai.providers.openrouter"}:
             raise ImportError("missing extra")
@@ -383,14 +331,13 @@ def test_ws_map_message() -> None:
 
     env.fetch_map = fetch_map  # type: ignore[attr-defined]
     app = create_app(runner)
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws") as ws:
-            assert ws.receive_json()["type"] == "state"
-            ws.send_json({"type": "map", "origin_x": 0, "origin_z": 0, "size": 32})
-            got = False
-            for _ in range(40):
-                msg = ws.receive_json()
-                if msg.get("type") == "map":
-                    got = True
-                    break
-            assert got
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        assert ws.receive_json()["type"] == "state"
+        ws.send_json({"type": "map", "origin_x": 0, "origin_z": 0, "size": 32})
+        got = False
+        for _ in range(40):
+            msg = ws.receive_json()
+            if msg.get("type") == "map":
+                got = True
+                break
+        assert got

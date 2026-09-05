@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -51,7 +50,9 @@ def test_setup_node(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
         cli.setup_node()
 
 
-def test_ensure_minecraft_skip(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_ensure_minecraft_skip(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     cli.ensure_minecraft(skip=True, host="localhost", port=25565)
     assert "Skipping Docker" in capsys.readouterr().out
 

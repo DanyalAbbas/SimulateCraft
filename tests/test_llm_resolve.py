@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -26,7 +25,6 @@ class MoveAction(Action):
 
 def test_resolve_model_priority(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(llm_mod, "load_dotenv", lambda *a, **k: None, raising=False)
-    from dotenv import load_dotenv
 
     monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
 
@@ -60,8 +58,6 @@ def test_openrouter_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_openrouter_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
-    fake_model = object()
-    fake_provider = object()
 
     class FakeProvider:
         def __init__(self, **kwargs: Any) -> None:
