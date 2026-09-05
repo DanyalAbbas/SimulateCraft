@@ -1,6 +1,6 @@
 # Use the live viewer
 
-After `./run.sh`, open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+After `.\run.ps1` or `./run.sh`, open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 The layout is three columns:
 

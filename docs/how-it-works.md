@@ -39,7 +39,7 @@ this until you customize agents.
 
 ```text
 src/simulatecraft/
-  cli.py              ./run.sh entry (setup + launch)
+  cli.py              run.ps1 / run.sh entry (setup + launch)
   core/               Runner, EventBus, schemas
   brains/             LLMBrain
   minecraft/          env, bridge, bot.js, RCON

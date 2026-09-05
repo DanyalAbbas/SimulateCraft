@@ -22,7 +22,7 @@ Fast free tier, good for agent tick loops.
 GROQ_API_KEY=gsk_...
 ```
 
-3. Run `./run.sh`.
+3. Run `.\run.ps1` (Windows) or `./run.sh` (macOS / Linux).
 
 Optional model override:
 
@@ -45,7 +45,7 @@ One key for many models, including free ones.
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-3. Run `./run.sh` (auto-picks a free Llama model), or set a model:
+3. Run `.\run.ps1` / `./run.sh` (auto-picks a free Llama model), or set a model:
 
 ```bash
 SIMULATECRAFT_MODEL=openrouter:meta-llama/llama-3.1-8b-instruct:free
