@@ -1,35 +1,31 @@
 # SimulateCraft
 
+![SimulateCraft cover](assets/cover.png)
+
 **LLM agents that play Minecraft.**
 
-Drop bots into a Java Edition server. Each agent gets a persona, memory, a goal,
-typed actions, and a live map in your browser.
+You run a Minecraft server, SimulateCraft joins with one or more bots, an LLM
+decides what each bot does each tick, and a browser UI lets you watch and steer
+the simulation.
 
-## Guides
+## Start here
 
-| Page | What it covers |
+| Tutorial | What you’ll do |
 |---|---|
-| [Getting started](getting-started.md) | Install, `.env`, `./run.sh` |
-| [LLM providers](llm-providers.md) | **Groq, OpenRouter, 9Router**, and more |
-| [Architecture](architecture.md) | Runner, Mineflayer bridge, EventBus |
-| [Live viewer](viewer.md) | Map UI, controls, WebSocket protocol |
-| [Contributing](contributing.md) | Dev setup, tests, PRs |
-| [API reference](reference/) | Every Python module (auto-generated) |
+| [First run](getting-started.md) | Install deps, set a key, launch with `./run.sh` |
+| [Connect an LLM](llm-providers.md) | Groq, OpenRouter, or 9Router |
+| [Use the live viewer](viewer.md) | Map, spawn agents, chat, pause / speed |
+| [How it works](how-it-works.md) | Big picture of the tick loop (no API dump) |
+| [Contributing](contributing.md) | Dev setup if you want to change the code |
 
-```bash
-echo 'GROQ_API_KEY=gsk_your_key' > .env
-./run.sh
-# viewer → http://127.0.0.1:8000
-```
+Need a function signature later? See the [API reference](reference/index.md) at the end of the sidebar.
 
-!!! tip "OpenRouter or 9Router?"
-    Prefer **[LLM providers](llm-providers.md)** for copy-paste `.env` setups —
-    OpenRouter free models, or a local 9Router gateway at `localhost:20128/v1`.
+!!! tip "Fastest path"
+    Get a free [Groq key](https://console.groq.com/keys), then:
 
-!!! tip "Live viewer"
-    Use **Add agent** to spawn bots with a custom persona and map spawn pin.
-    **Watcher roles** apply OP / spectator to *your* Minecraft username (not agents).
+    ```bash
+    echo 'GROQ_API_KEY=gsk_your_key' > .env
+    chmod +x run.sh && ./run.sh
+    ```
 
-!!! tip "API docs stay in sync"
-    The **API reference** is rebuilt from live docstrings on every `mkdocs build`.
-    Edit code under `src/simulatecraft/` — don’t hand-edit generated pages.
+    Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and join `localhost` in Minecraft **1.21.4**.

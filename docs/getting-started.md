@@ -1,89 +1,89 @@
-# Getting started
+# First run
 
-## Requirements
+This walkthrough gets SimulateCraft running on your machine end-to-end.
 
-- Python ≥ 3.11
-- Node.js ≥ 18
-- Docker (optional — ships a local Minecraft **1.21.4** server)
-- An LLM path: [Groq](https://console.groq.com/keys), [OpenRouter](https://openrouter.ai/keys),
-  or a local [9Router](https://9router.com/) gateway — see [LLM providers](llm-providers.md)
+## What you need
 
-## Two-command run
+- **Python 3.11+**
+- **Node.js 18+** (Mineflayer bots)
+- **Docker** — optional, but easiest way to get a Minecraft **1.21.4** server
+- An **LLM key** — free [Groq](https://console.groq.com/keys) is the simplest start
+
+## Step 1 — Clone and enter the repo
 
 ```bash
-echo 'GROQ_API_KEY=gsk_your_key' > .env
-chmod +x run.sh && ./run.sh
+git clone https://github.com/DanyalAbbas/SimulateCraft.git
+cd SimulateCraft
 ```
 
-Then open [http://127.0.0.1:8000](http://127.0.0.1:8000). Join `localhost` in
-Minecraft Java **1.21.4** to see the bot in-world.
+## Step 2 — Add an API key
 
-Already have a server?
+Copy the example env file and paste your key:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set at least one of:
+
+```bash
+GROQ_API_KEY=gsk_...
+```
+
+Other options (OpenRouter, 9Router) are covered in [Connect an LLM](llm-providers.md).
+
+## Step 3 — Launch
+
+```bash
+chmod +x run.sh
+./run.sh
+```
+
+That script will:
+
+1. Install Python packages (`uv`)
+2. Install the Mineflayer bot (`npm`)
+3. Start a local offline Minecraft server (Docker), unless you opt out
+4. Wait until the world is ready
+5. Start the explorer agent and the web viewer
+
+## Step 4 — Open the viewer and join Minecraft
+
+1. Browser → [http://127.0.0.1:8000](http://127.0.0.1:8000)
+2. Minecraft Java **1.21.4** → Multiplayer → `localhost`
+
+You should see the bot on the map and in-world.
+
+## Using your own Minecraft server
+
+Skip Docker and point at a server you already run:
 
 ```bash
 ./run.sh --no-docker --host localhost --port 25565
 ```
 
-### Other providers (quick)
+Use a version Mineflayer supports (bundled compose pins **1.21.4**). Online-mode
+servers need auth; the Docker server runs offline for easy local bots.
+
+## Useful CLI flags
 
 ```bash
-# OpenRouter
-cat > .env <<'EOF'
-OPENROUTER_API_KEY=sk-or-v1-...
-EOF
-
-# 9Router (gateway must already be running)
-cat > .env <<'EOF'
-OPENAI_BASE_URL=http://localhost:20128/v1
-OPENAI_API_KEY=your-9router-dashboard-key
-SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
-EOF
+./run.sh --help
+# common ones:
+#   --no-docker
+#   --host / --port
+#   --agents explorer builder
+#   --model groq:openai/gpt-oss-20b
+#   --viewer-port 8000
 ```
 
-Details and troubleshooting: **[LLM providers](llm-providers.md)**.
+## If something fails
 
-## Development install
+| Problem | What to try |
+|---|---|
+| “No LLM key” | Put `GROQ_API_KEY` (or another provider) in `.env` |
+| Bot never joins | Wait for `Done (` in `docker compose logs -f`; port open ≠ world ready |
+| Wrong MC version | Use 1.21.4, or set `--mc-version` to match your server |
+| Viewer blank | Confirm the process is still running; open `http://127.0.0.1:8000` |
 
-```bash
-uv sync --extra llm --extra dev --extra docs
-uv run pytest
-DISABLE_MKDOCS_2_WARNING=true uv run mkdocs serve
-```
-
-Prefer not to pull the embeddings/Torch stack — use `--extra llm` rather than
-`--all-extras`.
-
-## CLI
-
-```bash
-uv run simulatecraft --help
-```
-
-## Quick Python example
-
-```python
-import asyncio
-from simulatecraft import Agent, Runner, RunnerConfig
-from simulatecraft.brains.llm import LLMBrain, resolve_model
-from simulatecraft.minecraft import MinecraftEnvironment, ALL_ACTIONS
-
-env = MinecraftEnvironment(server_host="localhost", server_port=25565)
-env.add_bot("bot1", username="MyBot", goal="collect 64 logs of wood")
-
-brain = LLMBrain(
-    action_types=ALL_ACTIONS,
-    persona="A diligent Minecraft worker.",
-    model=resolve_model(),
-)
-
-runner = Runner(environment=env, config=RunnerConfig(tick_rate=1.0, max_ticks=300))
-runner.add_agent(Agent(id="bot1", name="MyBot", brain=brain))
-
-async def main():
-    async with env:
-        await runner.start()
-
-asyncio.run(main())
-```
-
-Next: [Architecture](architecture.md) · [Live viewer](viewer.md) · [API reference](reference/)
+Next: [Connect an LLM](llm-providers.md) · [Use the live viewer](viewer.md)
