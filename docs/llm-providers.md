@@ -1,5 +1,7 @@
 # Connect an LLM
 
+Prefer **OpenRouter**, **9Router**, or your own OpenAI-compatible API. Groq is fine for a quick smoke test but rate-limits quickly under agent load.
+
 SimulateCraft needs a language model to decide each agent’s next action.
 Pick **one** path below and put it in `.env` at the repo root.
 
@@ -11,7 +13,7 @@ Auto-select order when `SIMULATECRAFT_MODEL` is unset:
 
 ---
 
-## Option A — Groq (recommended)
+## Option A — Groq (quick try only — rate limits fast)
 
 Fast free tier, good for agent tick loops.
 
