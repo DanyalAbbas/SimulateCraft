@@ -57,8 +57,6 @@ class AgentBotConfig:
         spawn_x: float | None = None,
         spawn_y: float | None = None,
         spawn_z: float | None = None,
-        gamemode: str | None = None,
-        op: bool = False,
         persona: str = "",
     ) -> None:
         self.username = username
@@ -69,8 +67,6 @@ class AgentBotConfig:
         self.spawn_x = spawn_x
         self.spawn_y = spawn_y
         self.spawn_z = spawn_z
-        self.gamemode = gamemode
-        self.op = op
         self.persona = persona
 
 
@@ -138,8 +134,6 @@ class MinecraftEnvironment(Environment):
         spawn_x: float | None = None,
         spawn_y: float | None = None,
         spawn_z: float | None = None,
-        gamemode: str | None = None,
-        op: bool = False,
         persona: str = "",
     ) -> None:
         """Register an agent and configure its bot.
@@ -160,8 +154,6 @@ class MinecraftEnvironment(Environment):
             spawn_x=spawn_x,
             spawn_y=spawn_y,
             spawn_z=spawn_z,
-            gamemode=gamemode,
-            op=op,
             persona=persona,
         )
         self._chat_logs[agent_id] = []
@@ -232,8 +224,6 @@ class MinecraftEnvironment(Environment):
         spawn_x: float | None = None,
         spawn_y: float | None = None,
         spawn_z: float | None = None,
-        gamemode: str | None = None,
-        op: bool = False,
         persona: str = "",
     ) -> None:
         """Register and connect a bot while the environment is already running."""
@@ -246,8 +236,6 @@ class MinecraftEnvironment(Environment):
             spawn_x=spawn_x,
             spawn_y=spawn_y,
             spawn_z=spawn_z,
-            gamemode=gamemode,
-            op=op,
             persona=persona,
         )
         try:
@@ -274,40 +262,28 @@ class MinecraftEnvironment(Environment):
     async def _apply_presence(
         self, agent_id: str, bridge: MinecraftBridge, cfg: AgentBotConfig
     ) -> None:
-        """OP / teleport / gamemode via RCON (preferred) then bot-side fallback."""
-        commands: list[str] = []
-        if cfg.op:
-            commands.append(f"op {cfg.username}")
-        if cfg.spawn_x is not None and cfg.spawn_y is not None and cfg.spawn_z is not None:
-            commands.append(
-                f"tp {cfg.username} {cfg.spawn_x:.2f} {cfg.spawn_y:.2f} {cfg.spawn_z:.2f}"
-            )
-        if cfg.gamemode:
-            mode = cfg.gamemode.strip().lower()
-            if mode in {"survival", "creative", "adventure", "spectator"}:
-                commands.append(f"gamemode {mode} {cfg.username}")
-
-        if commands:
-            try:
-                from .rcon import run_commands
-
-                run_commands(commands)
-            except Exception as exc:
-                log.warning(
-                    "RCON presence setup for '%s' failed (%s); trying bot chat fallback",
-                    agent_id,
-                    exc,
-                )
-
+        """Teleport agent to pinned spawn via RCON (preferred) then chat fallback."""
+        if cfg.spawn_x is None or cfg.spawn_y is None or cfg.spawn_z is None:
+            return
+        commands = [f"tp {cfg.username} {cfg.spawn_x:.2f} {cfg.spawn_y:.2f} {cfg.spawn_z:.2f}"]
         try:
-            await bridge.configure_presence(
-                x=cfg.spawn_x,
-                y=cfg.spawn_y,
-                z=cfg.spawn_z,
-                gamemode=cfg.gamemode,
-            )
+            from .rcon import run_commands
+
+            run_commands(commands)
         except Exception as exc:
-            log.warning("Bot presence configure for '%s' failed: %s", agent_id, exc)
+            log.warning(
+                "RCON teleport for '%s' failed (%s); trying bot chat fallback",
+                agent_id,
+                exc,
+            )
+            try:
+                await bridge.configure_presence(
+                    x=cfg.spawn_x,
+                    y=cfg.spawn_y,
+                    z=cfg.spawn_z,
+                )
+            except Exception as bot_exc:
+                log.warning("Bot teleport for '%s' failed: %s", agent_id, bot_exc)
 
     async def close(self) -> None:
         """Disconnect all bots gracefully."""
@@ -478,8 +454,6 @@ class MinecraftEnvironment(Environment):
                     "biome": obs.biome,
                     "yaw": obs.yaw,
                     "persona": cfg.persona if cfg else "",
-                    "gamemode": cfg.gamemode if cfg else obs.stats.game_mode,
-                    "op": bool(cfg.op) if cfg else False,
                 }
             else:
                 agents[aid] = {
@@ -487,8 +461,6 @@ class MinecraftEnvironment(Environment):
                     "name": cfg.username if cfg else aid,
                     "goal": cfg.goal if cfg else "",
                     "persona": cfg.persona if cfg else "",
-                    "gamemode": cfg.gamemode if cfg else None,
-                    "op": bool(cfg.op) if cfg else False,
                 }
 
         world_map = self._map_cache or {}

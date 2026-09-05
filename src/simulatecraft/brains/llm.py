@@ -160,7 +160,7 @@ def _make_openrouter_model(model_name: str) -> Any:
     provider = OpenRouterProvider(
         api_key=api_key,
         app_title="SimulateCraft",
-        app_url="https://github.com/example/simulatecraft",
+        app_url="https://github.com/DanyalAbbas/SimulateCraft",
     )
     return OpenRouterModel(model_name, provider=provider)
 

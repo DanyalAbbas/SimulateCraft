@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Pixelify+Sans:wght@500;600;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=8" />
 </head>
 <body>
   <div class="world-bg" aria-hidden="true"></div>
@@ -26,97 +26,139 @@
         <span class="status-dot" aria-hidden="true"></span>
         <span class="status-label">connecting</span>
       </div>
-      <div id="tick-counter" class="tick" title="Simulation tick">t=0</div>
+      <div id="tick-counter" class="tick" title="Simulation tick / max">t=0 / —</div>
+      <div id="speed-readout" class="tick speed" title="Tick rate (ticks per second)">1.0 tps</div>
       <div id="coord-readout" class="tick coord" title="Map center">0, 0</div>
     </div>
 
     <div class="controls" role="group" aria-label="Simulation controls">
+      <button type="button" id="btn-toggle-config" class="mc-btn sidebar-ctrl" title="Toggle configure panel" aria-pressed="false">Config</button>
+      <button type="button" id="btn-toggle-rail" class="mc-btn sidebar-ctrl" title="Toggle chat panel" aria-pressed="false">Chat</button>
       <button type="button" id="btn-follow" class="mc-btn" title="Center on agents">Follow</button>
+      <span class="ctrl-sep" aria-hidden="true"></span>
+      <button type="button" id="btn-slower" class="mc-btn mc-btn-compact" title="Halve tick speed (−)">−</button>
+      <button type="button" id="btn-faster" class="mc-btn mc-btn-compact" title="Double tick speed (+)">+</button>
+      <select id="speed-preset" class="speed-select" title="Tick speed preset" aria-label="Tick speed">
+        <option value="0.25">0.25×</option>
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="4">4×</option>
+        <option value="8">8×</option>
+        <option value="max">Max</option>
+      </select>
+      <span class="ctrl-sep" aria-hidden="true"></span>
       <button type="button" id="btn-play" class="mc-btn mc-btn-green" title="Resume (Space)">Play</button>
       <button type="button" id="btn-pause" class="mc-btn" title="Pause (Space)">Pause</button>
       <button type="button" id="btn-step" class="mc-btn" title="Step one tick (.)">Step</button>
+      <button type="button" id="btn-step-10" class="mc-btn mc-btn-compact" title="Step 10 ticks">×10</button>
+      <button type="button" id="btn-extend-ticks" class="mc-btn mc-btn-compact" title="Add 1000 max ticks">+1k</button>
     </div>
   </header>
 
   <main class="stage">
+    <aside class="config-column panel" id="config-column" aria-label="Configuration">
+      <div class="panel-title">
+        <h2>Configure</h2>
+        <button type="button" class="sidebar-close" data-sidebar="config" title="Hide configure" aria-label="Hide configure">×</button>
+      </div>
+
+      <div class="config-scroll">
+        <details class="workshop" id="workshop" open>
+          <summary class="workshop-summary">Add agent</summary>
+          <form id="agent-form" class="agent-form" method="post" action="#" onsubmit="return false;">
+            <label>
+              Username
+              <input id="agent-username" name="username" type="text" maxlength="16" required placeholder="Steve" />
+            </label>
+            <label>
+              Goal
+              <input id="agent-goal" name="goal" type="text" maxlength="500" placeholder="build a shelter" />
+            </label>
+            <label>
+              System prompt / persona
+              <textarea id="agent-persona" name="persona" rows="3" maxlength="4000" placeholder="You are a careful builder who narrates in chat…"></textarea>
+            </label>
+            <label>
+              Extra instructions (optional)
+              <textarea id="agent-instructions" name="instructions" rows="2" maxlength="8000" placeholder="Prefer mining oak logs first…"></textarea>
+            </label>
+            <div class="spawn-row">
+              <span class="spawn-label">Spawn pin</span>
+              <button type="button" id="btn-pin" class="mc-btn" title="Click the map to set spawn XZ">Pin on map</button>
+              <span id="spawn-readout" class="spawn-readout">not set</span>
+            </div>
+            <div class="spawn-y-row">
+              <label>
+                Y
+                <input id="agent-spawn-y" name="spawn_y" type="number" step="1" value="64" />
+              </label>
+              <input id="agent-spawn-x" name="spawn_x" type="hidden" />
+              <input id="agent-spawn-z" name="spawn_z" type="hidden" />
+            </div>
+            <p id="agent-form-status" class="form-status" hidden></p>
+            <button type="button" class="mc-btn mc-btn-green" id="btn-spawn-agent">Spawn agent</button>
+          </form>
+        </details>
+
+        <details class="workshop" id="watcher-panel">
+          <summary class="workshop-summary">Watcher roles</summary>
+          <form id="watcher-form" class="agent-form" method="post" action="#" onsubmit="return false;">
+            <p class="form-hint">Join Minecraft first with this exact username, then assign. Spectator needs you online.</p>
+            <label>
+              Minecraft username
+              <input id="watcher-username" type="text" maxlength="16" required placeholder="YourName" autocomplete="username" />
+            </label>
+            <label class="field-role">
+              Role
+              <select id="watcher-role" required>
+                <option value="spectator">Spectator (watch)</option>
+                <option value="op">OP</option>
+                <option value="survival">Survival</option>
+                <option value="creative">Creative</option>
+                <option value="adventure">Adventure</option>
+                <option value="deop">Remove OP</option>
+              </select>
+            </label>
+            <p id="watcher-form-status" class="form-status" hidden></p>
+            <button type="button" class="mc-btn mc-btn-green" id="btn-assign-role">Assign role</button>
+          </form>
+        </details>
+
+        <section class="roster-block" aria-label="Agents">
+          <div class="panel-title">
+            <h2>Players</h2>
+            <span id="agent-count" class="panel-sub">0</span>
+          </div>
+          <div id="hud" class="roster-list">
+            <p class="empty">No agents yet.</p>
+          </div>
+        </section>
+      </div>
+    </aside>
+
     <section class="map-column" aria-label="World map">
+      <button type="button" class="sidebar-tab sidebar-tab-config" id="tab-open-config" title="Show configure" aria-label="Show configure" hidden>Config</button>
+      <button type="button" class="sidebar-tab sidebar-tab-rail" id="tab-open-rail" title="Show chat" aria-label="Show chat" hidden>Chat</button>
       <div class="map-viewport" id="map-viewport">
         <canvas id="world" width="1024" height="1024" aria-label="Minecraft map"></canvas>
         <div id="map-overlay" class="map-overlay" hidden>Loading map…</div>
         <div class="map-hint">Drag to pan · scroll to zoom · click map to pin spawn (when Pin is on)</div>
         <div id="spawn-pin" class="spawn-pin" hidden></div>
       </div>
-
-      <div class="panel roster-panel" aria-label="Agents">
-        <div class="panel-title">
-          <h2>Players</h2>
-          <span id="agent-count" class="panel-sub">0</span>
-        </div>
-        <div id="hud" class="roster-list">
-          <p class="empty">No agents yet.</p>
-        </div>
-      </div>
     </section>
 
-    <aside class="rail panel" aria-label="Workshop, events and chat">
-      <details class="workshop" id="workshop" open>
-        <summary class="workshop-summary">Add agent</summary>
-        <form id="agent-form" class="agent-form">
-          <label>
-            Username
-            <input id="agent-username" name="username" type="text" maxlength="16" required placeholder="Steve" />
-          </label>
-          <label>
-            Goal
-            <input id="agent-goal" name="goal" type="text" maxlength="500" placeholder="build a shelter" />
-          </label>
-          <label>
-            System prompt / persona
-            <textarea id="agent-persona" name="persona" rows="4" maxlength="4000" placeholder="You are a careful builder who narrates in chat…"></textarea>
-          </label>
-          <label>
-            Extra instructions (optional)
-            <textarea id="agent-instructions" name="instructions" rows="2" maxlength="8000" placeholder="Prefer mining oak logs first…"></textarea>
-          </label>
-          <div class="spawn-row">
-            <span class="spawn-label">Spawn pin</span>
-            <button type="button" id="btn-pin" class="mc-btn" title="Click the map to set spawn XZ">Pin on map</button>
-            <span id="spawn-readout" class="spawn-readout">not set</span>
-          </div>
-          <div class="spawn-y-row">
-            <label>
-              Y
-              <input id="agent-spawn-y" name="spawn_y" type="number" step="1" value="64" />
-            </label>
-            <input id="agent-spawn-x" name="spawn_x" type="hidden" />
-            <input id="agent-spawn-z" name="spawn_z" type="hidden" />
-          </div>
-          <div class="role-row">
-            <label class="check"><input id="agent-op" type="checkbox" /> OP</label>
-            <label class="check"><input id="agent-spectator" type="checkbox" /> Spectator</label>
-            <label>
-              Gamemode
-              <select id="agent-gamemode">
-                <option value="">default</option>
-                <option value="survival">survival</option>
-                <option value="creative">creative</option>
-                <option value="adventure">adventure</option>
-                <option value="spectator">spectator</option>
-              </select>
-            </label>
-          </div>
-          <p id="agent-form-status" class="form-status" hidden></p>
-          <button type="submit" class="mc-btn mc-btn-green" id="btn-spawn-agent">Spawn agent</button>
-        </form>
-      </details>
-
+    <aside class="rail panel" id="chat-rail" aria-label="Events and chat">
       <div class="panel-title rail-title">
         <h2>Chat &amp; events</h2>
-        <div class="filters" role="tablist" aria-label="Filter events">
-          <button type="button" class="filter is-active" data-filter="all" role="tab" aria-selected="true">All</button>
-          <button type="button" class="filter" data-filter="action" role="tab" aria-selected="false">Acts</button>
-          <button type="button" class="filter" data-filter="chat" role="tab" aria-selected="false">Chat</button>
-          <button type="button" class="filter" data-filter="system" role="tab" aria-selected="false">Sys</button>
+        <div class="rail-title-actions">
+          <div class="filters" role="tablist" aria-label="Filter events">
+            <button type="button" class="filter is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+            <button type="button" class="filter" data-filter="action" role="tab" aria-selected="false">Acts</button>
+            <button type="button" class="filter" data-filter="chat" role="tab" aria-selected="false">Chat</button>
+            <button type="button" class="filter" data-filter="system" role="tab" aria-selected="false">Sys</button>
+          </div>
+          <button type="button" class="sidebar-close" data-sidebar="rail" title="Hide chat" aria-label="Hide chat">×</button>
         </div>
       </div>
 
@@ -134,6 +176,6 @@
     </aside>
   </main>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=8"></script>
 </body>
 </html>

@@ -4,6 +4,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+coverage.json
+htmlcov/
 *.egg-info/
 dist/
 build/

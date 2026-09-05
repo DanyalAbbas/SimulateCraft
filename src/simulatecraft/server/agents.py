@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -12,7 +12,6 @@ from simulatecraft.core import Agent, AgentState, Runner
 from simulatecraft.examples.minecraft_explorer.agents import custom
 
 _ID_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{1,31}$")
-_Gamemode = Literal["survival", "creative", "adventure", "spectator"]
 
 
 class AgentCreateRequest(BaseModel):
@@ -31,9 +30,6 @@ class AgentCreateRequest(BaseModel):
     spawn_x: float | None = None
     spawn_y: float | None = None
     spawn_z: float | None = None
-    gamemode: _Gamemode | None = None
-    op: bool = False
-    spectator: bool = False
 
 
 class AgentCreateResponse(BaseModel):
@@ -70,10 +66,6 @@ async def create_agent(runner: Runner, req: AgentCreateRequest) -> AgentCreateRe
         raise ValueError("agent id must be 2–32 chars, start with a letter, [A-Za-z0-9_-]")
     agent_id = _unique_id(runner, agent_id)
 
-    gamemode = req.gamemode
-    if req.spectator:
-        gamemode = "spectator"
-
     model = (req.model or resolve_model()).strip()
     await spawn(
         agent_id,
@@ -82,8 +74,6 @@ async def create_agent(runner: Runner, req: AgentCreateRequest) -> AgentCreateRe
         spawn_x=req.spawn_x,
         spawn_y=req.spawn_y,
         spawn_z=req.spawn_z,
-        gamemode=gamemode,
-        op=req.op or req.spectator,
         persona=req.persona,
     )
 
@@ -104,8 +94,6 @@ async def create_agent(runner: Runner, req: AgentCreateRequest) -> AgentCreateRe
                         "role": "custom",
                         "persona": req.persona,
                         "goal": req.goal,
-                        "gamemode": gamemode,
-                        "op": req.op or req.spectator,
                     }
                 ),
             )

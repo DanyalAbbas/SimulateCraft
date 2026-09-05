@@ -135,7 +135,41 @@ class Runner:
         self._stop_reason = reason
 
     def request_step(self, n: int = 1) -> None:
-        self._step_requests += n
+        self._step_requests += max(1, int(n))
+
+    def set_tick_rate(self, rate: float | None) -> float | None:
+        """Ticks per second. ``None`` = run as fast as possible."""
+        if rate is None:
+            self.config.tick_rate = None
+        else:
+            value = float(rate)
+            if value <= 0:
+                self.config.tick_rate = None
+            else:
+                self.config.tick_rate = max(0.05, min(50.0, value))
+        return self.config.tick_rate
+
+    def adjust_tick_rate(self, factor: float) -> float | None:
+        """Multiply current rate (e.g. 2.0 faster, 0.5 slower). Overspeed → unlimited."""
+        current = self.config.tick_rate
+        if factor <= 0:
+            raise ValueError("factor must be positive")
+        if current is None or current <= 0:
+            if factor < 1.0:
+                return self.set_tick_rate(50.0)
+            return None
+        new_rate = current * float(factor)
+        if new_rate > 50.0:
+            return self.set_tick_rate(None)
+        return self.set_tick_rate(new_rate)
+
+    def set_max_ticks(self, n: int) -> int:
+        floor = self.environment.tick_count + 1
+        self.config.max_ticks = max(floor, int(n))
+        return self.config.max_ticks
+
+    def extend_max_ticks(self, n: int = 1000) -> int:
+        return self.set_max_ticks(self.config.max_ticks + max(1, int(n)))
 
     async def step_once(self) -> None:
         """Execute exactly one tick regardless of pause state."""

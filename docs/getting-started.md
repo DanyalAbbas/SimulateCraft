@@ -5,7 +5,8 @@
 - Python ≥ 3.11
 - Node.js ≥ 18
 - Docker (optional — ships a local Minecraft **1.21.4** server)
-- A free [Groq](https://console.groq.com/keys) or [OpenRouter](https://openrouter.ai/keys) API key
+- An LLM path: [Groq](https://console.groq.com/keys), [OpenRouter](https://openrouter.ai/keys),
+  or a local [9Router](https://9router.com/) gateway — see [LLM providers](llm-providers.md)
 
 ## Two-command run
 
@@ -23,6 +24,24 @@ Already have a server?
 ./run.sh --no-docker --host localhost --port 25565
 ```
 
+### Other providers (quick)
+
+```bash
+# OpenRouter
+cat > .env <<'EOF'
+OPENROUTER_API_KEY=sk-or-v1-...
+EOF
+
+# 9Router (gateway must already be running)
+cat > .env <<'EOF'
+OPENAI_BASE_URL=http://localhost:20128/v1
+OPENAI_API_KEY=your-9router-dashboard-key
+SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
+EOF
+```
+
+Details and troubleshooting: **[LLM providers](llm-providers.md)**.
+
 ## Development install
 
 ```bash
@@ -30,6 +49,9 @@ uv sync --extra llm --extra dev --extra docs
 uv run pytest
 DISABLE_MKDOCS_2_WARNING=true uv run mkdocs serve
 ```
+
+Prefer not to pull the embeddings/Torch stack — use `--extra llm` rather than
+`--all-extras`.
 
 ## CLI
 
@@ -64,5 +86,4 @@ async def main():
 asyncio.run(main())
 ```
 
-See [Architecture](architecture.md) for how the pieces connect, and the
-[API reference](reference/) for every module.
+Next: [Architecture](architecture.md) · [Live viewer](viewer.md) · [API reference](reference/)

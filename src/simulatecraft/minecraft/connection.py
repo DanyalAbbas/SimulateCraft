@@ -279,13 +279,13 @@ class MinecraftBridge:
         z: float | None = None,
         gamemode: str | None = None,
     ) -> dict[str, Any]:
-        """Teleport / set gamemode after spawn (bot must be OP for chat commands)."""
+        """Teleport after spawn via chat (RCON is preferred for reliability)."""
+        _ = gamemode  # agents never set gamemode; kept for call-site compatibility
         return await self.call(
             "configure_presence",
             x=x,
             y=y,
             z=z,
-            gamemode=gamemode,
         )
 
     # ------------------------------------------------------------------

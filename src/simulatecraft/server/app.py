@@ -24,6 +24,7 @@ from ..core.events import (
 )
 from ..core.runner import Runner
 from .agents import AgentCreateRequest, AgentCreateResponse, create_agent, delete_agent
+from .roles import WatcherRoleRequest, WatcherRoleResponse, assign_watcher_role
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +35,15 @@ class RunnerStatus(BaseModel):
     running: bool
     paused: bool
     tick: int
+    tick_rate: float | None = None
+    max_ticks: int = 0
+
+
+class ControlBody(BaseModel):
+    """Optional extras for control commands (step count, rates, etc.)."""
+
+    n: int | None = None
+    value: float | None = None
 
 
 class StateResponse(BaseModel):
@@ -77,6 +87,8 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
             running=runner.is_running,
             paused=runner.is_paused,
             tick=runner.environment.tick_count,
+            tick_rate=runner.config.tick_rate,
+            max_ticks=runner.config.max_ticks,
         )
 
     def full_state() -> StateResponse:
@@ -95,10 +107,28 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
 
     @app.post("/api/control/{command}")
     async def control(
-        command: Literal["pause", "resume", "step", "stop", "reset"],
-    ) -> dict[str, str]:
-        await _apply_control(runner, command)
-        return {"ok": command}
+        command: Literal[
+            "pause",
+            "resume",
+            "step",
+            "stop",
+            "reset",
+            "faster",
+            "slower",
+            "set_tick_rate",
+            "set_max_ticks",
+            "extend_ticks",
+        ],
+        body: ControlBody | None = None,
+    ) -> dict[str, Any]:
+        extras = body or ControlBody()
+        result = await _apply_control(
+            runner,
+            command,
+            n=extras.n,
+            value=extras.value,
+        )
+        return {"ok": command, **result}
 
     @app.post("/api/chat")
     async def chat(text: str, target: str | None = None, sender: str = "human") -> dict[str, str]:
@@ -128,6 +158,17 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:
             log.exception("agent delete failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/api/watchers/role")
+    async def post_watcher_role(body: WatcherRoleRequest) -> WatcherRoleResponse:
+        """Assign OP / spectator / gamemode to a human Minecraft player (not an agent)."""
+        try:
+            return assign_watcher_role(body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("watcher role assign failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.websocket("/ws")
@@ -175,26 +216,59 @@ async def _push_states(
         broadcaster.clients.discard(ws)
 
 
-async def _apply_control(runner: Runner, command: str) -> None:
+async def _apply_control(
+    runner: Runner,
+    command: str,
+    *,
+    n: int | None = None,
+    value: float | None = None,
+) -> dict[str, Any]:
     """Apply a control command immediately (works even when not running)."""
     if command == "pause":
         runner.request_pause()
         await runner.bus.publish(SimulationPaused())
-    elif command == "resume":
+        return {"paused": True}
+    if command == "resume":
         runner.request_resume()
         await runner.bus.publish(SimulationResumed())
-    elif command == "step":
-        if runner.is_running and not runner.is_paused:
-            runner.request_step(1)
+        return {"paused": False}
+    if command == "step":
+        count = max(1, min(100, int(n or 1)))
+        if runner.is_running and runner.is_paused:
+            runner.request_step(count)
         else:
-            await runner.step_once()
-    elif command == "stop":
+            for _ in range(count):
+                await runner.step_once()
+        return {"steps": count, "tick": runner.environment.tick_count}
+    if command == "stop":
         runner.request_stop("server_control")
-    elif command == "reset":
+        return {"running": False}
+    if command == "reset":
         runner.environment.reset()
         await runner.bus.publish(TickCompleted(), tick=runner.environment.tick_count)
-    else:
-        raise ValueError(f"unknown control command {command!r}")
+        return {"tick": runner.environment.tick_count}
+    if command == "faster":
+        rate = runner.adjust_tick_rate(2.0)
+        return {"tick_rate": rate}
+    if command == "slower":
+        rate = runner.adjust_tick_rate(0.5)
+        return {"tick_rate": rate}
+    if command == "set_tick_rate":
+        if value is None:
+            raise ValueError("set_tick_rate requires value")
+        # value <= 0 means unlimited
+        rate = runner.set_tick_rate(None if float(value) <= 0 else float(value))
+        return {"tick_rate": rate}
+    if command == "set_max_ticks":
+        if value is None:
+            raise ValueError("set_max_ticks requires value")
+        max_ticks = runner.set_max_ticks(int(value))
+        return {"max_ticks": max_ticks}
+    if command == "extend_ticks":
+        amount = max(1, int(n or value or 1000))
+        max_ticks = runner.extend_max_ticks(amount)
+        return {"max_ticks": max_ticks, "extended_by": amount}
+    raise ValueError(f"unknown control command {command!r}")
 
 
 async def _handle_client_message(
@@ -210,7 +284,12 @@ async def _handle_client_message(
             )
         )
     elif msg_type == "control":
-        await _apply_control(runner, str(message["command"]))
+        await _apply_control(
+            runner,
+            str(message["command"]),
+            n=message.get("n"),
+            value=message.get("value"),
+        )
     elif msg_type == "map":
         env = runner.environment
         fetch = getattr(env, "fetch_map", None)
@@ -232,6 +311,11 @@ async def _handle_client_message(
         deleted = await delete_agent(runner, agent_id)
         if ws is not None:
             await ws.send_text(json.dumps({"type": "agent_deleted", **deleted}))
+    elif msg_type == "watcher_role":
+        role_req = WatcherRoleRequest.model_validate(message.get("watcher") or message)
+        assigned = assign_watcher_role(role_req)
+        if ws is not None:
+            await ws.send_text(json.dumps({"type": "watcher_role", **assigned.model_dump()}))
     else:
         raise ValueError(f"unknown inbound type {msg_type!r}")
 

@@ -92,8 +92,10 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - LLM providers: llm-providers.md
   - Architecture: architecture.md
   - Live viewer: viewer.md
+  - Contributing: contributing.md
   - API reference: reference/
 
 watch:
