@@ -24,7 +24,7 @@ function Test-Command($Name) {
 
 function Require-Command($Name, $Hint) {
     if (-not (Test-Command $Name)) {
-        Write-Host "Missing `$Name`." -ForegroundColor Red
+        Write-Host "Missing '$Name'." -ForegroundColor Red
         Write-Host $Hint
         exit 1
     }
