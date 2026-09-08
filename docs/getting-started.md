@@ -1,27 +1,95 @@
 # First run
 
-Get SimulateCraft running end-to-end. Most users are on **Windows** — use `run.ps1` / `run.cmd`. macOS and Linux use `run.sh`.
+Get SimulateCraft running end-to-end. Most users are on **Windows** — use the PowerShell one-liner or `run.ps1` / `run.cmd`. macOS and Linux use the curl one-liner or `run.sh`.
 
-## What you need
+## What you need (before the one-liner)
 
-- **Python 3.11+**
-- **Node.js 18+** (Mineflayer bots)
-- **Docker Desktop** — optional, but easiest way to get Minecraft **1.21.4**
-- An **LLM key** — free [Groq](https://console.groq.com/keys) is the simplest start
+Install these yourself first — the installer will not install them for you:
 
-## Step 1 — Clone the repo
+| Tool | Why | Where |
+|---|---|---|
+| **Git** | Clones the repo | [git-scm.com](https://git-scm.com/) |
+| **Node.js 18+** | Mineflayer bots | [nodejs.org](https://nodejs.org) |
+| **Docker Desktop** | Bundled Minecraft **1.21.4** (optional if you pass `--no-docker`) | [docker.com](https://www.docker.com/products/docker-desktop/) |
+| **LLM provider** | Agent brains | [OpenRouter](https://openrouter.ai/keys), [9Router](https://9router.com/), or your own OpenAI-compatible API |
+
+`uv` (Python runner) is installed automatically if missing.
+
+Prefer **OpenRouter**, **9Router**, or your own API. Groq works for a smoke test but rate-limits quickly under agent load.
+
+## Fastest path — one command
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.ps1 | iex
+```
+
+If that URL fails (occasional raw.githubusercontent.com 503):
+
+```powershell
+irm https://cdn.jsdelivr.net/gh/DanyalAbbas/SimulateCraft@main/install.ps1 | iex
+```
+
+If PowerShell blocks scripts later, use `run.cmd`, or once:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+### macOS / Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.sh | bash
+```
+
+### What the installer does
+
+1. Checks for Git + Node 18+
+2. Installs `uv` if needed
+3. Clones into `~/SimulateCraft` (or `%USERPROFILE%\SimulateCraft` on Windows)
+4. Creates `.env` from `.env.example`
+5. **Stops with next steps** if no LLM key is set yet (blank `OPENROUTER_API_KEY=` does not count)
+6. Otherwise launches `run.ps1` / `run.sh`
+
+Optional: set a key in the same shell before installing:
+
+```powershell
+# Windows
+$env:OPENROUTER_API_KEY = "sk-or-..."
+irm https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.ps1 | iex
+```
+
+```bash
+# macOS / Linux
+OPENROUTER_API_KEY=sk-or-... curl -fsSL https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.sh | bash
+```
+
+Clone only (no launch): `SIMULATECRAFT_SKIP_RUN=1` (Unix) or `$env:SIMULATECRAFT_SKIP_RUN = "1"` (Windows).
+
+## Manual install
+
+### 1. Clone
 
 ```text
 git clone https://github.com/DanyalAbbas/SimulateCraft.git
 cd SimulateCraft
 ```
 
-## Step 2 — Add an API key
+### 2. Add an LLM provider
 
-Copy `.env.example` to `.env` and set:
+Copy `.env.example` to `.env` and set one of:
 
 ```text
-GROQ_API_KEY=gsk_...
+OPENROUTER_API_KEY=sk-or-...
+```
+
+or for 9Router / your own API:
+
+```text
+OPENAI_BASE_URL=http://localhost:20128/v1
+OPENAI_API_KEY=...
+SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
 ```
 
 | OS | How |
@@ -29,9 +97,9 @@ GROQ_API_KEY=gsk_...
 | Windows | Copy `.env.example` → `.env` in File Explorer, then edit in Notepad |
 | macOS / Linux | `cp .env.example .env` then edit |
 
-Other providers: [Connect an LLM](llm-providers.md).
+More detail: [Connect an LLM](llm-providers.md).
 
-## Step 3 — Launch
+### 3. Launch
 
 **Windows (PowerShell):**
 
@@ -39,7 +107,7 @@ Other providers: [Connect an LLM](llm-providers.md).
 .\run.ps1
 ```
 
-Or double-click **`run.cmd`** in File Explorer (same thing; avoids execution-policy prompts).
+Or double-click **`run.cmd`** in File Explorer.
 
 **macOS / Linux:**
 
@@ -56,12 +124,10 @@ The launcher will:
 4. Wait until the world is ready  
 5. Start the explorer agent and the web viewer  
 
-## Step 4 — Open the viewer and join Minecraft
+### 4. Open the viewer and join Minecraft
 
 1. Browser → [http://127.0.0.1:8000](http://127.0.0.1:8000)  
 2. Minecraft Java **1.21.4** → Multiplayer → `localhost`  
-
-You should see the bot on the map and in-world.
 
 ## Using your own Minecraft server
 
@@ -79,32 +145,25 @@ Bundled Docker pins **1.21.4** and offline mode (easy for bots). Online-mode ser
 
 ## Useful flags
 
-Same flags on Windows and Unix:
-
 ```text
 --no-docker
 --host / --port
 --agents explorer builder
---model groq:openai/gpt-oss-20b
+--model openrouter:meta-llama/llama-3.1-8b-instruct:free
 --viewer-port 8000
 --help
-```
-
-Examples:
-
-```powershell
-.\run.ps1 --agents explorer builder
-.\run.ps1 --help
 ```
 
 ## If something fails
 
 | Problem | What to try |
 |---|---|
-| “No LLM key” | Put `GROQ_API_KEY` in `.env` (same folder as `run.ps1`) |
+| “No LLM provider” | Set `OPENROUTER_API_KEY` (or 9Router vars) in `.env` — blank values do not count |
+| Missing `git` / `node` | Install Git and Node 18+ before the one-liner |
 | PowerShell “cannot be loaded” | Use `run.cmd`, or `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| `install.ps1` download 503 | Use the jsDelivr one-liner above |
 | Bot never joins | Wait for world ready: `docker compose logs -f` → look for `Done (` |
-| Docker missing | Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), or use `--no-docker` with your own server |
+| Docker missing | Install Docker Desktop, or use `--no-docker` with your own server |
 | Wrong MC version | Use 1.21.4, or pass `--mc-version` to match your server |
 | Viewer blank | Keep the terminal open; open `http://127.0.0.1:8000` |
 

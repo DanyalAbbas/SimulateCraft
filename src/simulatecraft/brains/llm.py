@@ -18,7 +18,7 @@ Model string formats accepted by LLMBrain / resolve_model()
 - ``"google-gla:gemini-2.0-flash"``                         ← direct Google key
 - ``"test"``                                                ← offline TestModel, no key needed
 
-Auto-selection order (resolve_model):  GROQ_API_KEY → OPENROUTER_API_KEY → "test"
+Auto-selection order (resolve_model):  OPENROUTER_API_KEY → GROQ_API_KEY → "test"
 
 OpenAI-compatible gateways (9Router, LiteLLM, vLLM, …)
 ------------------------------------------------------
@@ -176,10 +176,13 @@ def resolve_model(env_var: str = "SIMULATECRAFT_MODEL") -> str:
          anthropic:claude-sonnet-4-5
          openai:gpt-4o-mini
          test
-    2. ``GROQ_API_KEY`` present  →  ``groq:openai/gpt-oss-120b``
-       (Groq is free-tier, very fast — best default for agent tick loops)
-    3. ``OPENROUTER_API_KEY`` present  →  ``openrouter:meta-llama/llama-3.1-8b-instruct:free``
+    2. ``OPENROUTER_API_KEY`` present  →  ``openrouter:meta-llama/llama-3.1-8b-instruct:free``
+    3. ``GROQ_API_KEY`` present  →  ``groq:openai/gpt-oss-120b``
+       (Groq is fine for a smoke test; free tier rate-limits under agent load)
     4. No keys at all  →  ``"test"`` (offline TestModel, zero network calls)
+
+    For 9Router / custom OpenAI-compatible APIs, set ``OPENAI_BASE_URL`` and
+    ``SIMULATECRAFT_MODEL`` (and usually ``OPENAI_API_KEY``) explicitly.
     """
     from dotenv import load_dotenv
 
@@ -189,22 +192,23 @@ def resolve_model(env_var: str = "SIMULATECRAFT_MODEL") -> str:
     if model:
         return model
 
-    if os.getenv("GROQ_API_KEY", "").strip():
-        groq_model = "groq:openai/gpt-oss-120b"
-        log.info("No %s set; using Groq free-tier model: %s", env_var, groq_model)
-        return groq_model
-
     if os.getenv("OPENROUTER_API_KEY", "").strip():
         free_model = "openrouter:meta-llama/llama-3.1-8b-instruct:free"
         log.info("No %s set; using free OpenRouter model: %s", env_var, free_model)
         return free_model
 
+    if os.getenv("GROQ_API_KEY", "").strip():
+        groq_model = "groq:openai/gpt-oss-120b"
+        log.info("No %s set; using Groq model: %s", env_var, groq_model)
+        return groq_model
+
     log.warning(
-        "No %s, GROQ_API_KEY, or OPENROUTER_API_KEY set. Using offline TestModel — "
+        "No %s, OPENROUTER_API_KEY, or GROQ_API_KEY set. Using offline TestModel — "
         "agents will produce canned responses.\n"
-        "  Free options:\n"
-        "    Groq (fast):       export GROQ_API_KEY=gsk_...   (console.groq.com/keys)\n"
-        "    OpenRouter (many): export OPENROUTER_API_KEY=sk-or-... (openrouter.ai/keys)",
+        "  Preferred:\n"
+        "    OpenRouter: export OPENROUTER_API_KEY=sk-or-... (openrouter.ai/keys)\n"
+        "    9Router / own API: set OPENAI_BASE_URL + OPENAI_API_KEY + SIMULATECRAFT_MODEL\n"
+        "    Groq (rate-limited): export GROQ_API_KEY=gsk_... (console.groq.com/keys)",
         env_var,
     )
     return "test"

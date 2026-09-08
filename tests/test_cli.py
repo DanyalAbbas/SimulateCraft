@@ -32,7 +32,21 @@ def test_require_llm_key_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: None)
-    with pytest.raises(SystemExit, match="No LLM key"):
+    with pytest.raises(SystemExit, match="No LLM provider"):
+        cli.require_llm_key()
+
+
+def test_require_llm_key_base_url_needs_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
+        "SIMULATECRAFT_MODEL",
+        "OPENAI_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:20128/v1")
+    monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: None)
+    with pytest.raises(SystemExit, match="SIMULATECRAFT_MODEL"):
         cli.require_llm_key()
 
 

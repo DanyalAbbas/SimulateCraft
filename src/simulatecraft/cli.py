@@ -125,32 +125,46 @@ def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
     )
 
 
+def _env_set(name: str) -> bool:
+    return bool(os.getenv(name, "").strip())
+
+
 def require_llm_key() -> None:
     load_dotenv(REPO_ROOT / ".env")
     load_dotenv()
     if (
-        os.getenv("GROQ_API_KEY")
-        or os.getenv("OPENROUTER_API_KEY")
-        or os.getenv("SIMULATECRAFT_MODEL")
-        or os.getenv("OPENAI_BASE_URL")
-        or os.getenv("OPENAI_API_KEY")
+        _env_set("OPENROUTER_API_KEY")
+        or _env_set("GROQ_API_KEY")
+        or _env_set("SIMULATECRAFT_MODEL")
     ):
         return
+    if _env_set("OPENAI_BASE_URL"):
+        sys.exit(
+            "OPENAI_BASE_URL is set, but SIMULATECRAFT_MODEL is missing.\n\n"
+            "For 9Router / your own API, set all three in `.env`:\n"
+            "  OPENAI_BASE_URL=http://localhost:20128/v1\n"
+            "  OPENAI_API_KEY=<key>\n"
+            "  SIMULATECRAFT_MODEL=oc/mimo-v2.5-free\n\n"
+            "Docs: https://danyalabbas.github.io/SimulateCraft/llm-providers/\n"
+        )
     sys.exit(
-        "No LLM key found.\n\n"
-        "1. Get a free Groq key (30 seconds, no credit card):\n"
-        "     https://console.groq.com/keys\n"
-        "2. Put it in a .env file in this folder:\n"
-        "     GROQ_API_KEY=gsk_your_key\n"
-        "   (copy .env.example → .env, then edit)\n"
-        "3. Run again:\n"
-        "     ./run.sh          # macOS / Linux\n"
-        "     .\\run.ps1        # Windows PowerShell\n"
-        "     run.cmd          # Windows double-click / cmd\n\n"
-        "Or point at an OpenAI-compatible gateway (e.g. 9Router):\n"
-        "     OPENAI_BASE_URL=http://localhost:20128/v1\n"
-        "     OPENAI_API_KEY=<dashboard-key>\n"
-        "     SIMULATECRAFT_MODEL=oc/mimo-v2.5-free\n"
+        "No LLM provider configured.\n\n"
+        "Edit `.env` in this folder (copy from `.env.example` if needed).\n\n"
+        "Preferred options:\n"
+        "  OpenRouter:\n"
+        "    OPENROUTER_API_KEY=sk-or-...\n"
+        "    https://openrouter.ai/keys\n\n"
+        "  9Router / your own OpenAI-compatible API:\n"
+        "    OPENAI_BASE_URL=http://localhost:20128/v1\n"
+        "    OPENAI_API_KEY=<key>\n"
+        "    SIMULATECRAFT_MODEL=oc/mimo-v2.5-free\n\n"
+        "  Groq (quick try only — rate-limits fast under agent load):\n"
+        "    GROQ_API_KEY=gsk_...\n\n"
+        "Then run again:\n"
+        "  ./run.sh          # macOS / Linux\n"
+        "  .\\run.ps1        # Windows PowerShell\n"
+        "  run.cmd          # Windows double-click / cmd\n\n"
+        "Docs: https://danyalabbas.github.io/SimulateCraft/llm-providers/\n"
     )
 
 

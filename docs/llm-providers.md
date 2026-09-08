@@ -7,36 +7,15 @@ Pick **one** path below and put it in `.env` at the repo root.
 
 Auto-select order when `SIMULATECRAFT_MODEL` is unset:
 
-1. `GROQ_API_KEY` → Groq default model  
-2. `OPENROUTER_API_KEY` → free OpenRouter Llama  
+1. `OPENROUTER_API_KEY` → free OpenRouter Llama  
+2. `GROQ_API_KEY` → Groq default model  
 3. Otherwise → offline `test` model (no real thinking)
 
----
-
-## Option A — Groq (quick try only — rate limits fast)
-
-Fast free tier, good for agent tick loops.
-
-1. Create a key at [console.groq.com/keys](https://console.groq.com/keys).
-2. In `.env`:
-
-```bash
-GROQ_API_KEY=gsk_...
-```
-
-3. Run `.\run.ps1` (Windows) or `./run.sh` (macOS / Linux).
-
-Optional model override:
-
-```bash
-SIMULATECRAFT_MODEL=groq:openai/gpt-oss-120b
-# or a smaller/faster one:
-# SIMULATECRAFT_MODEL=groq:openai/gpt-oss-20b
-```
+For 9Router / custom gateways, always set `SIMULATECRAFT_MODEL` yourself.
 
 ---
 
-## Option B — OpenRouter
+## Option A — OpenRouter (recommended)
 
 One key for many models, including free ones.
 
@@ -55,11 +34,11 @@ SIMULATECRAFT_MODEL=openrouter:meta-llama/llama-3.1-8b-instruct:free
 ```
 
 !!! note
-    Free OpenRouter models can rate-limit with several agents. Prefer Groq if ticks feel slow.
+    Free OpenRouter models can still rate-limit with several agents. Switch to a paid OpenRouter model, 9Router, or your own API if ticks feel slow.
 
 ---
 
-## Option C — 9Router (local gateway)
+## Option B — 9Router (local gateway)
 
 [9Router](https://9router.com/) is a local OpenAI-compatible proxy. Start it first
 (dashboard usually at `http://localhost:20128`), then point SimulateCraft at it:
@@ -81,7 +60,40 @@ curl -s http://localhost:20128/v1/models \
 
 ---
 
-## Option D — Offline (no key)
+## Option C — Your own OpenAI-compatible API
+
+Same three variables as 9Router — any endpoint that speaks the OpenAI chat API:
+
+```bash
+OPENAI_BASE_URL=https://your-gateway.example/v1
+OPENAI_API_KEY=...
+SIMULATECRAFT_MODEL=your-model-id
+```
+
+---
+
+## Option D — Groq (quick try only — rate limits fast)
+
+Useful for a short smoke test, not sustained multi-agent runs.
+
+1. Create a key at [console.groq.com/keys](https://console.groq.com/keys).
+2. In `.env`:
+
+```bash
+GROQ_API_KEY=gsk_...
+```
+
+Optional model override:
+
+```bash
+SIMULATECRAFT_MODEL=groq:openai/gpt-oss-120b
+# or a smaller/faster one:
+# SIMULATECRAFT_MODEL=groq:openai/gpt-oss-20b
+```
+
+---
+
+## Option E — Offline (no key)
 
 For wiring tests only — agents use canned responses:
 
@@ -95,9 +107,10 @@ SIMULATECRAFT_MODEL=test
 
 | Symptom | Fix |
 |---|---|
-| Script exits “No LLM key” | Set Groq/OpenRouter/9Router vars in `.env` |
+| Script exits “No LLM provider” | Set a non-empty `OPENROUTER_API_KEY` (or 9Router / Groq vars) in `.env` |
+| `OPENAI_BASE_URL` set but still fails | Also set `SIMULATECRAFT_MODEL` (and usually `OPENAI_API_KEY`) |
 | OpenRouter auth error | Key must look like `sk-or-...` |
 | 9Router connection refused | Start 9Router; base URL must include `/v1` |
-| Agents barely chat / act slowly | Switch to Groq or a paid model; free tiers throttle |
+| Agents barely chat / act slowly | Use a paid OpenRouter model, 9Router, or your own API — free tiers throttle |
 
 Next: [Use the live viewer](viewer.md)

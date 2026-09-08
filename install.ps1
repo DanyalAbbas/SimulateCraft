@@ -6,6 +6,9 @@
 .EXAMPLE
   irm https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.ps1 | iex
 
+  # If raw.githubusercontent.com fails (occasional 503), use:
+  irm https://cdn.jsdelivr.net/gh/DanyalAbbas/SimulateCraft@main/install.ps1 | iex
+
   $env:OPENROUTER_API_KEY = "sk-or-..."
   irm https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.ps1 | iex
 
@@ -18,16 +21,22 @@ $RepoUrl = if ($env:SIMULATECRAFT_REPO) { $env:SIMULATECRAFT_REPO } else { "http
 $TargetDir = if ($env:SIMULATECRAFT_DIR) { $env:SIMULATECRAFT_DIR } else { Join-Path $HOME "SimulateCraft" }
 $Branch = if ($env:SIMULATECRAFT_BRANCH) { $env:SIMULATECRAFT_BRANCH } else { "main" }
 
-function Test-Command($Name) {
+function Test-Command([string]$Name) {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
-function Require-Command($Name, $Hint) {
+function Require-Command([string]$Name, [string]$Hint) {
     if (-not (Test-Command $Name)) {
         Write-Host "Missing '$Name'." -ForegroundColor Red
         Write-Host $Hint
         exit 1
     }
+}
+
+function Test-EnvValueSet([string]$Key) {
+    $raw = Get-Content $envFile -Raw -ErrorAction SilentlyContinue
+    if ($null -eq $raw) { return $false }
+    return [bool]($raw -match "(?m)^$Key=.+")
 }
 
 Write-Host "==> SimulateCraft installer"
@@ -37,13 +46,28 @@ Require-Command "git" "Install Git for Windows: https://git-scm.com/download/win
 Require-Command "node" "Install Node.js 18+ from https://nodejs.org"
 Require-Command "npm" "npm ships with Node.js — reinstall from https://nodejs.org"
 
+try {
+    $nodeMajor = [int](& node -p "process.versions.node.split('.')[0]")
+} catch {
+    $nodeMajor = 0
+}
+if ($nodeMajor -lt 18) {
+    Write-Host "Node.js 18+ required (found $(node -v))." -ForegroundColor Red
+    Write-Host "Install from https://nodejs.org and re-run."
+    exit 1
+}
+
 if (-not (Test-Command "uv")) {
     Write-Host "==> Installing uv…"
     Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
-    $uvBin = Join-Path $env:USERPROFILE ".local\bin"
-    $uvCargo = Join-Path $env:USERPROFILE ".cargo\bin"
-    if (Test-Path $uvBin) { $env:Path = "$uvBin;$env:Path" }
-    if (Test-Path $uvCargo) { $env:Path = "$uvCargo;$env:Path" }
+    $uvCandidates = @(
+        (Join-Path $env:USERPROFILE ".local\bin"),
+        (Join-Path $env:USERPROFILE ".cargo\bin"),
+        (Join-Path $env:LOCALAPPDATA "uv\bin")
+    )
+    foreach ($bin in $uvCandidates) {
+        if (Test-Path $bin) { $env:Path = "$bin;$env:Path" }
+    }
 }
 Require-Command "uv" "uv install failed. See https://docs.astral.sh/uv/getting-started/installation/"
 
@@ -105,20 +129,35 @@ if ($env:GROQ_API_KEY) {
     Write-Host "==> Wrote GROQ_API_KEY into .env"
 }
 
-$raw = Get-Content $envFile -Raw -ErrorAction SilentlyContinue
-$hasProvider = $raw -match '(?m)^(OPENROUTER_API_KEY|OPENAI_BASE_URL|GROQ_API_KEY)=.+'
-if (-not $hasProvider) {
-    Write-Host ""
-    Write-Host "No LLM provider configured in .env yet." -ForegroundColor Yellow
-    Write-Host "Prefer OpenRouter, 9Router, or your own OpenAI-compatible API (Groq rate-limits quickly)."
-    Write-Host "Edit $envFile — see https://danyalabbas.github.io/SimulateCraft/llm-providers/"
-    Write-Host "Then: cd `"$TargetDir`"; .\run.ps1"
-    Write-Host ""
-}
+$hasProvider = (Test-EnvValueSet "OPENROUTER_API_KEY") -or
+    (Test-EnvValueSet "OPENAI_BASE_URL") -or
+    (Test-EnvValueSet "GROQ_API_KEY") -or
+    (Test-EnvValueSet "SIMULATECRAFT_MODEL")
 
 if ($env:SIMULATECRAFT_SKIP_RUN -eq "1") {
     Write-Host "==> Setup complete (skip run). Next:"
+    Write-Host "    1. Edit $envFile with OpenRouter / 9Router / your API"
+    Write-Host "    2. cd `"$TargetDir`"; .\run.ps1"
+    exit 0
+}
+
+if (-not $hasProvider -and $env:SIMULATECRAFT_FORCE_RUN -ne "1") {
+    Write-Host ""
+    Write-Host "==> Repo ready at $TargetDir"
+    Write-Host "No LLM provider configured yet (blank keys in .env do not count)." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Edit .env, then launch:"
+    Write-Host "    Prefer OpenRouter:  OPENROUTER_API_KEY=sk-or-..."
+    Write-Host "    Or 9Router / own API:"
+    Write-Host "      OPENAI_BASE_URL=http://localhost:20128/v1"
+    Write-Host "      OPENAI_API_KEY=..."
+    Write-Host "      SIMULATECRAFT_MODEL=oc/mimo-v2.5-free"
+    Write-Host "    Docs: https://danyalabbas.github.io/SimulateCraft/llm-providers/"
+    Write-Host ""
     Write-Host "    cd `"$TargetDir`"; .\run.ps1"
+    Write-Host "    (or double-click run.cmd)"
+    Write-Host ""
+    Write-Host "(Docker Desktop needed for the bundled Minecraft 1.21.4 server.)"
     exit 0
 }
 
