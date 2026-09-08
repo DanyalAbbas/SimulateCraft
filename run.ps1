@@ -15,9 +15,9 @@ function Test-Command($Name) {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
-function Require-Command($Name, $Hint) {
+function Require-Command([string]$Name, [string]$Hint) {
     if (-not (Test-Command $Name)) {
-        Write-Host "Missing ``$Name``." -ForegroundColor Red
+        Write-Host "Missing '$Name'." -ForegroundColor Red
         Write-Host $Hint
         exit 1
     }

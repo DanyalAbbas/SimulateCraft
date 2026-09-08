@@ -32,15 +32,18 @@ def test_resolve_model_priority(monkeypatch: pytest.MonkeyPatch) -> None:
     assert resolve_model() == "groq:custom"
 
     monkeypatch.delenv("SIMULATECRAFT_MODEL", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    assert resolve_model().startswith("openrouter:")
+
+    # OpenRouter wins when both keys are set
     monkeypatch.setenv("GROQ_API_KEY", "gsk")
+    assert resolve_model().startswith("openrouter:")
+
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert resolve_model().startswith("groq:")
 
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
-    assert resolve_model().startswith("openrouter:")
-
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert resolve_model() == "test"
 
 

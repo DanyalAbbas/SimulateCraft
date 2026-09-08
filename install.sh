@@ -2,13 +2,15 @@
 # SimulateCraft one-line installer (macOS / Linux)
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.sh | bash
+# Prerequisites (install yourself first): Git, Node.js 18+, Docker Desktop (for bundled MC)
 # Optional env:
 #   SIMULATECRAFT_DIR=~/SimulateCraft
 #   OPENROUTER_API_KEY=...        # written into .env if set
 #   OPENAI_BASE_URL=...           # for 9Router / own OpenAI-compatible API
 #   OPENAI_API_KEY=...
 #   SIMULATECRAFT_MODEL=...
-#   SIMULATECRAFT_SKIP_RUN=1      # clone + sync only, don't launch
+#   SIMULATECRAFT_SKIP_RUN=1      # clone only, don't launch
+#   SIMULATECRAFT_FORCE_RUN=1     # launch even if no LLM provider configured
 #   SIMULATECRAFT_NO_DOCKER=1     # pass --no-docker to the launcher
 set -euo pipefail
 
@@ -24,12 +26,25 @@ need() {
   fi
 }
 
+env_value_set() {
+  # True if KEY=non-empty-value exists in .env (ignores blank KEY= lines).
+  local key="$1"
+  grep -qE "^${key}=.+" .env 2>/dev/null
+}
+
 echo "==> SimulateCraft installer"
 echo "    Target: $TARGET_DIR"
 
 need git "Install git, then re-run this installer."
 need node "Install Node.js 18+ from https://nodejs.org"
 need npm "npm ships with Node.js — reinstall from https://nodejs.org"
+
+NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)"
+if [[ "${NODE_MAJOR}" -lt 18 ]]; then
+  echo "Node.js 18+ required (found $(node -v 2>/dev/null || echo unknown))."
+  echo "Install from https://nodejs.org and re-run."
+  exit 1
+fi
 
 if ! command -v uv >/dev/null 2>&1; then
   echo "==> Installing uv…"
@@ -93,20 +108,39 @@ if [[ -n "${GROQ_API_KEY:-}" ]]; then
   echo "==> Wrote GROQ_API_KEY into .env"
 fi
 
-if ! grep -qE '^(OPENROUTER_API_KEY|OPENAI_BASE_URL|GROQ_API_KEY)=.+' .env 2>/dev/null; then
-  echo
-  echo "No LLM provider configured in .env yet."
-  echo "Prefer OpenRouter, 9Router, or your own OpenAI-compatible API (Groq rate-limits quickly)."
-  echo "Edit $TARGET_DIR/.env — see https://danyalabbas.github.io/SimulateCraft/llm-providers/"
-  echo "Then: cd \"$TARGET_DIR\" && ./run.sh"
-  echo
+HAS_PROVIDER=0
+if env_value_set OPENROUTER_API_KEY \
+  || env_value_set OPENAI_BASE_URL \
+  || env_value_set GROQ_API_KEY \
+  || env_value_set SIMULATECRAFT_MODEL; then
+  HAS_PROVIDER=1
 fi
 
-chmod +x run.sh
+chmod +x run.sh install.sh 2>/dev/null || true
 
 if [[ "${SIMULATECRAFT_SKIP_RUN:-}" == "1" ]]; then
   echo "==> Setup complete (skip run). Next:"
+  echo "    1. Edit $TARGET_DIR/.env with OpenRouter / 9Router / your API"
+  echo "    2. cd \"$TARGET_DIR\" && ./run.sh"
+  exit 0
+fi
+
+if [[ "$HAS_PROVIDER" -eq 0 && "${SIMULATECRAFT_FORCE_RUN:-}" != "1" ]]; then
+  echo
+  echo "==> Repo ready at $TARGET_DIR"
+  echo "No LLM provider configured yet (blank keys in .env do not count)."
+  echo
+  echo "Edit .env, then launch:"
+  echo "    Prefer OpenRouter:  OPENROUTER_API_KEY=sk-or-..."
+  echo "    Or 9Router / own API:"
+  echo "      OPENAI_BASE_URL=http://localhost:20128/v1"
+  echo "      OPENAI_API_KEY=..."
+  echo "      SIMULATECRAFT_MODEL=oc/mimo-v2.5-free"
+  echo "    Docs: https://danyalabbas.github.io/SimulateCraft/llm-providers/"
+  echo
   echo "    cd \"$TARGET_DIR\" && ./run.sh"
+  echo
+  echo "(Docker Desktop needed for the bundled Minecraft 1.21.4 server.)"
   exit 0
 fi
 
