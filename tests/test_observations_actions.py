@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from simulatecraft.minecraft.actions import (
     ActivateBlock,
+    AttackEntity,
+    CancelPath,
     Chat,
+    CollectItem,
     Craft,
     DropItem,
+    Eat,
     EquipItem,
     FollowEntity,
+    GiveItem,
     Jump,
     LookAt,
     MineBlock,
@@ -88,3 +93,23 @@ def test_action_summaries() -> None:
     assert NavigateTo(x=10, y=64, z=10).render()
     assert FollowEntity(target="Steve").render()
     assert Wait(ticks=3).render()
+    assert AttackEntity(target="zombie").render()
+    assert AttackEntity().render()
+    assert Eat(item_name="bread").render()
+    assert Eat().render()
+    assert CollectItem(item_name="oak_log").render()
+    assert CollectItem().render()
+    assert GiveItem(target="Steve", item_name="bread", count=2).render()
+    assert CancelPath().render()
+
+
+def test_all_actions_kinds_unique() -> None:
+    from simulatecraft.minecraft.actions import ALL_ACTIONS
+
+    kinds = [cls.model_fields["kind"].default for cls in ALL_ACTIONS]
+    assert len(kinds) == len(set(kinds))
+    assert "attack" in kinds
+    assert "eat" in kinds
+    assert "collect" in kinds
+    assert "give" in kinds
+    assert "cancel_path" in kinds

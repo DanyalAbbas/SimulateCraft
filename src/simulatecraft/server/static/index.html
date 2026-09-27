@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Pixelify+Sans:wght@500;600;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=8" />
+  <link rel="stylesheet" href="/static/style.css?v=13" />
 </head>
 <body>
   <div class="world-bg" aria-hidden="true"></div>
@@ -48,7 +48,7 @@
         <option value="max">Max</option>
       </select>
       <span class="ctrl-sep" aria-hidden="true"></span>
-      <button type="button" id="btn-play" class="mc-btn mc-btn-green" title="Resume (Space)">Play</button>
+      <button type="button" id="btn-play" class="mc-btn mc-btn-green" title="Resume (Space)" hidden>Play</button>
       <button type="button" id="btn-pause" class="mc-btn" title="Pause (Space)">Pause</button>
       <button type="button" id="btn-step" class="mc-btn" title="Step one tick (.)">Step</button>
       <button type="button" id="btn-step-10" class="mc-btn mc-btn-compact" title="Step 10 ticks">×10</button>
@@ -76,8 +76,19 @@
               <input id="agent-goal" name="goal" type="text" maxlength="500" placeholder="build a shelter" />
             </label>
             <label>
+              Draft notes
+              <textarea id="agent-draft" name="draft" rows="2" maxlength="4000" placeholder="Curious builder, chats a lot, afraid of creepers…"></textarea>
+            </label>
+            <div class="prompt-actions">
+              <button type="button" class="mc-btn" id="btn-generate-prompt" title="Expand draft notes into a structured system prompt">Generate prompt</button>
+              <label class="check-row prompt-llm-toggle">
+                <input id="agent-prompt-llm" type="checkbox" checked />
+                Use LLM polish
+              </label>
+            </div>
+            <label>
               System prompt / persona
-              <textarea id="agent-persona" name="persona" rows="3" maxlength="4000" placeholder="You are a careful builder who narrates in chat…"></textarea>
+              <textarea id="agent-persona" name="persona" rows="4" maxlength="4000" placeholder="You are a careful builder who narrates in chat…"></textarea>
             </label>
             <label>
               Extra instructions (optional)
@@ -98,6 +109,41 @@
             </div>
             <p id="agent-form-status" class="form-status" hidden></p>
             <button type="button" class="mc-btn mc-btn-green" id="btn-spawn-agent">Spawn agent</button>
+          </form>
+        </details>
+
+        <details class="workshop" id="bulk-agents-panel">
+          <summary class="workshop-summary">Bulk import agents</summary>
+          <form id="bulk-agents-form" class="agent-form" method="post" action="#" onsubmit="return false;">
+            <p class="form-hint">CSV or Excel. Expected columns: <span id="bulk-expected-headers">Name</span>. Edit the map under Agent workshop.</p>
+            <label>
+              Roster file
+              <input id="bulk-agents-file" type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            </label>
+            <p class="form-hint">Uses the spawn pin above when set. Personas are built from mapped columns.</p>
+            <p id="bulk-agents-status" class="form-status" hidden></p>
+            <button type="button" class="mc-btn mc-btn-green" id="btn-bulk-agents">Upload &amp; spawn</button>
+          </form>
+        </details>
+
+        <details class="workshop" id="agent-workshop-panel">
+          <summary class="workshop-summary">Agent workshop</summary>
+          <form id="agent-workshop-form" class="agent-form" method="post" action="#" onsubmit="return false;">
+            <p class="form-hint">Controls how “Generate prompt” writes system prompts, and which CSV/Excel columns map to agents.</p>
+            <label>
+              Prompt generator instructions
+              <textarea id="workshop-prompt-instructions" rows="6" maxlength="12000" placeholder="You write structured system prompts…"></textarea>
+            </label>
+            <div class="spawn-row">
+              <span class="spawn-label">Roster preset</span>
+              <button type="button" class="mc-btn" id="btn-workshop-preset-university" title="University / org columns">University</button>
+              <button type="button" class="mc-btn" id="btn-workshop-preset-minimal" title="Name / goal / persona only">Minimal</button>
+            </div>
+            <p class="form-hint">Columns (key · label · headers · role). Role <code>name</code> is required.</p>
+            <div id="workshop-columns" class="workshop-columns" aria-label="Roster columns"></div>
+            <button type="button" class="mc-btn" id="btn-workshop-add-column">Add column</button>
+            <p id="workshop-status" class="form-status" hidden></p>
+            <button type="button" class="mc-btn mc-btn-green" id="btn-workshop-save">Save workshop</button>
           </form>
         </details>
 
@@ -125,6 +171,93 @@
           </form>
         </details>
 
+        <details class="workshop" id="world-rules-panel">
+          <summary class="workshop-summary">World rules</summary>
+          <form id="world-rules-form" class="agent-form" method="post" action="#" onsubmit="return false;">
+            <div class="check-list">
+              <label class="check-row"><input id="rule-allow-night" type="checkbox" checked /><span>Allow night</span></label>
+              <label class="check-row"><input id="rule-daylight-cycle" type="checkbox" checked /><span>Daylight cycle</span></label>
+              <label class="check-row"><input id="rule-weather-cycle" type="checkbox" checked /><span>Weather cycle</span></label>
+              <label class="check-row"><input id="rule-clear-weather" type="checkbox" checked /><span>Clear weather now</span></label>
+              <label class="check-row"><input id="rule-mob-spawning" type="checkbox" checked /><span>Mob spawning</span></label>
+              <label class="check-row"><input id="rule-hostile-mobs" type="checkbox" checked /><span>Hostile mobs</span></label>
+              <label class="check-row"><input id="rule-mob-griefing" type="checkbox" /><span>Mob griefing</span></label>
+              <label class="check-row"><input id="rule-keep-inventory" type="checkbox" checked /><span>Keep inventory</span></label>
+              <label class="check-row"><input id="rule-fire-spreads" type="checkbox" /><span>Fire spreads</span></label>
+            </div>
+            <label>
+              Day length (real minutes, blank = vanilla ~20)
+              <input id="rule-day-length" type="number" min="0.5" max="240" step="0.5" placeholder="20" />
+            </label>
+            <label>
+              Snap time on apply
+              <select id="rule-time-of-day">
+                <option value="keep">Keep current</option>
+                <option value="day">Day</option>
+                <option value="noon">Noon</option>
+                <option value="sunrise">Sunrise</option>
+                <option value="sunset">Sunset</option>
+                <option value="night">Night</option>
+                <option value="midnight">Midnight</option>
+              </select>
+            </label>
+            <p id="world-rules-status" class="form-status" hidden></p>
+            <button type="button" class="mc-btn mc-btn-green" id="btn-save-rules">Apply rules</button>
+          </form>
+        </details>
+
+        <details class="workshop" id="boundaries-panel">
+          <summary class="workshop-summary">Boundaries</summary>
+          <form id="boundaries-form" class="agent-form" method="post" action="#" onsubmit="return false;">
+            <div class="check-list">
+              <label class="check-row"><input id="bound-enabled" type="checkbox" /><span>Enable play area</span></label>
+            </div>
+            <p class="form-hint">Draw a <strong>square</strong> on the map: click one corner (stays fixed), move, click to set the size. Outside is shaded; <strong>Build border</strong> applies a vanilla <code>worldborder</code>. <strong>Preload map</strong> teleports a bot across the square so terrain tiles fill in (needs a spawned agent).</p>
+            <div class="spawn-row">
+              <button type="button" id="btn-bound-draw" class="mc-btn" title="Click two opposite corners on the map">Draw square</button>
+              <button type="button" id="btn-bound-clear" class="mc-btn" title="Clear square">Clear</button>
+            </div>
+            <p id="bound-pin-readout" class="spawn-readout">No square</p>
+            <div class="spawn-y-row" hidden>
+              <label>Wall Y base <input id="bound-wall-y" type="number" step="1" value="60" /></label>
+              <label>Wall height <input id="bound-wall-h" type="number" min="1" max="64" step="1" value="16" /></label>
+            </div>
+            <p class="form-hint" id="bound-aabb-readout">Square: —</p>
+            <input id="bound-min-x" type="hidden" value="-64" />
+            <input id="bound-max-x" type="hidden" value="64" />
+            <input id="bound-min-z" type="hidden" value="-64" />
+            <input id="bound-max-z" type="hidden" value="64" />
+            <label>
+              Backup enforce (if someone phases the wall)
+              <select id="bound-enforce">
+                <option value="soft">Soft (teleport back)</option>
+                <option value="hard">Hard (block navigate out)</option>
+                <option value="off">Off (worldborder only)</option>
+              </select>
+            </label>
+            <p id="boundaries-status" class="form-status" hidden></p>
+            <div class="spawn-row">
+              <button type="button" class="mc-btn mc-btn-green" id="btn-save-boundaries">Build border</button>
+              <button type="button" class="mc-btn" id="btn-preload-map" title="Teleport a bot across the square and scan tiles">Preload map</button>
+            </div>
+          </form>
+        </details>
+
+        <details class="workshop" id="world-import-panel">
+          <summary class="workshop-summary">Import world</summary>
+          <form id="world-import-form" class="agent-form" method="post" action="#" onsubmit="return false;">
+            <p class="form-hint">Zip a Java world folder (must include <code>level.dat</code>). Then restart Minecraft.</p>
+            <p id="world-import-label" class="form-hint">Active: Default (fresh world)</p>
+            <label>
+              World .zip
+              <input id="world-zip" type="file" accept=".zip,application/zip" />
+            </label>
+            <p id="world-import-status" class="form-status" hidden></p>
+            <button type="button" class="mc-btn mc-btn-green" id="btn-import-world">Upload world</button>
+            <button type="button" class="mc-btn" id="btn-restart-mc">Restart Minecraft</button>
+          </form>
+        </details>
+
         <section class="roster-block" aria-label="Agents">
           <div class="panel-title">
             <h2>Players</h2>
@@ -143,8 +276,9 @@
       <div class="map-viewport" id="map-viewport">
         <canvas id="world" width="1024" height="1024" aria-label="Minecraft map"></canvas>
         <div id="map-overlay" class="map-overlay" hidden>Loading map…</div>
-        <div class="map-hint">Drag to pan · scroll to zoom · click map to pin spawn (when Pin is on)</div>
+        <div class="map-hint">Drag to pan · scroll to zoom · Terrain appears in loaded chunks around agents · Esc cancels draw/pin</div>
         <div id="spawn-pin" class="spawn-pin" hidden></div>
+        <div id="corner-pins" class="corner-pins" aria-hidden="true"></div>
       </div>
     </section>
 
@@ -176,6 +310,6 @@
     </aside>
   </main>
 
-  <script src="/static/app.js?v=8"></script>
+  <script src="/static/app.js?v=26"></script>
 </body>
 </html>

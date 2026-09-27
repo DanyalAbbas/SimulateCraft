@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -10,6 +11,10 @@ from pydantic import BaseModel, Field
 from simulatecraft.brains.llm import resolve_model
 from simulatecraft.core import Agent, AgentState, Runner
 from simulatecraft.examples.minecraft_explorer.agents import custom
+from simulatecraft.server.persona import build_structured_persona, parse_roster_file
+from simulatecraft.server.workshop_settings import load_workshop_settings
+
+log = logging.getLogger(__name__)
 
 _ID_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{1,31}$")
 
@@ -30,12 +35,20 @@ class AgentCreateRequest(BaseModel):
     spawn_x: float | None = None
     spawn_y: float | None = None
     spawn_z: float | None = None
+    skin_url: str | None = Field(default=None, max_length=500)
 
 
 class AgentCreateResponse(BaseModel):
     ok: bool = True
     agent_id: str
     username: str
+
+
+class BulkAgentCreateResponse(BaseModel):
+    ok: bool = True
+    created: list[AgentCreateResponse] = Field(default_factory=list)
+    errors: list[dict[str, str]] = Field(default_factory=list)
+    total_rows: int = 0
 
 
 def _slug_username(username: str) -> str:
@@ -67,44 +80,111 @@ async def create_agent(runner: Runner, req: AgentCreateRequest) -> AgentCreateRe
     agent_id = _unique_id(runner, agent_id)
 
     model = (req.model or resolve_model()).strip()
-    await spawn(
-        agent_id,
-        username=req.username.strip()[:16],
-        goal=req.goal,
-        spawn_x=req.spawn_x,
-        spawn_y=req.spawn_y,
-        spawn_z=req.spawn_z,
+    brain = custom(
         persona=req.persona,
+        goal=req.goal,
+        model=model,
+        instructions=req.instructions,
     )
-
-    try:
-        brain = custom(
-            persona=req.persona,
-            goal=req.goal,
-            model=model,
-            instructions=req.instructions,
+    state_data: dict[str, Any] = {
+        "role": "custom",
+        "persona": req.persona,
+        "goal": req.goal,
+    }
+    if req.skin_url:
+        state_data["skin_url"] = req.skin_url.strip()
+    # Register on the runner *before* awaiting Minecraft spawn so a concurrent
+    # tick cannot see an env agent_id with no Brain (that used to crash the loop).
+    runner.add_agent(
+        Agent(
+            id=agent_id,
+            name=req.username.strip()[:16],
+            brain=brain,
+            state=AgentState(data=state_data),
         )
-        runner.add_agent(
-            Agent(
-                id=agent_id,
-                name=req.username.strip()[:16],
-                brain=brain,
-                state=AgentState(
-                    data={
-                        "role": "custom",
-                        "persona": req.persona,
-                        "goal": req.goal,
-                    }
-                ),
-            )
+    )
+    try:
+        await spawn(
+            agent_id,
+            username=req.username.strip()[:16],
+            goal=req.goal,
+            spawn_x=req.spawn_x,
+            spawn_y=req.spawn_y,
+            spawn_z=req.spawn_z,
+            persona=req.persona,
         )
     except Exception:
+        runner.remove_agent(agent_id)
         despawn = getattr(env, "despawn_bot", None)
         if callable(despawn):
             await despawn(agent_id)
+        else:
+            env.unregister_agent(agent_id)
         raise
 
     return AgentCreateResponse(agent_id=agent_id, username=req.username.strip()[:16])
+
+
+def _unique_username(runner: Runner, base: str) -> str:
+    """Avoid Minecraft username collisions among already-spawned bots."""
+    existing = {
+        (getattr(a, "name", None) or a.id).lower() for a in runner.agents
+    }
+    for cfg in getattr(runner.environment, "_bot_configs", {}).values():
+        uname = getattr(cfg, "username", None)
+        if uname:
+            existing.add(str(uname).lower())
+    candidate = base[:16]
+    if candidate.lower() not in existing:
+        return candidate
+    for n in range(2, 100):
+        suffix = str(n)
+        trimmed = f"{base[: max(1, 16 - len(suffix))]}{suffix}"
+        if trimmed.lower() not in existing:
+            return trimmed
+    return f"A{abs(hash(base)) % 10_000_000}"[:16]
+
+
+async def create_agents_from_roster(
+    runner: Runner,
+    *,
+    filename: str,
+    data: bytes,
+    spawn_x: float | None = None,
+    spawn_y: float | None = None,
+    spawn_z: float | None = None,
+    model: str | None = None,
+) -> BulkAgentCreateResponse:
+    workshop = load_workshop_settings()
+    profiles = parse_roster_file(filename, data, settings=workshop)
+    created: list[AgentCreateResponse] = []
+    errors: list[dict[str, str]] = []
+    for idx, profile in enumerate(profiles, start=1):
+        try:
+            username = _unique_username(runner, profile.minecraft_username())
+            persona = (
+                profile.persona.strip()
+                or build_structured_persona(profile, settings=workshop)
+            )[:4000]
+            req = AgentCreateRequest(
+                username=username,
+                persona=persona,
+                goal=profile.default_goal(),
+                model=model,
+                spawn_x=spawn_x,
+                spawn_y=spawn_y,
+                spawn_z=spawn_z,
+                skin_url=profile.skin_url or None,
+            )
+            created.append(await create_agent(runner, req))
+        except Exception as exc:
+            log.exception("bulk agent create failed for row %s (%s)", idx, profile.name)
+            errors.append({"row": str(idx), "name": profile.name, "error": str(exc)})
+    return BulkAgentCreateResponse(
+        created=created,
+        errors=errors,
+        total_rows=len(profiles),
+    )
 
 
 async def delete_agent(runner: Runner, agent_id: str) -> dict[str, Any]:

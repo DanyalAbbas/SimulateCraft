@@ -100,7 +100,7 @@ class Runner:
             raise RuntimeError("Runner already running")
         await self._emit(SimulationStarted(agent_ids=[a.id for a in self.agents]))
         self._running = True
-        self._stop_reason = "max_ticks"
+        self._stop_reason = ""
         await self._sync_membership()
         try:
             while self._running and self.environment.tick_count < self.config.max_ticks:
@@ -120,9 +120,17 @@ class Runner:
                     self._stop_reason = "no_agents_left"
                     break
                 await self._pace()
+            if self._running and self.environment.tick_count >= self.config.max_ticks:
+                self._stop_reason = "max_ticks"
+            elif self._running and not self._stop_reason:
+                self._stop_reason = "stopped"
+        except Exception as exc:
+            self._stop_reason = f"error: {type(exc).__name__}: {exc}"
+            log.exception("Simulation loop crashed")
+            raise
         finally:
             self._running = False
-            await self._emit(SimulationEnded(reason=self._stop_reason))
+            await self._emit(SimulationEnded(reason=self._stop_reason or "stopped"))
 
     def request_pause(self) -> None:
         self._paused = True
@@ -184,7 +192,9 @@ class Runner:
 
     async def run_tick(self) -> None:
         tick = self.environment.tick_count
-        active_ids = self.environment.agent_ids
+        # Only agents that have a Brain on the runner — env may register a bot
+        # mid-spawn before create_agent finishes adding the Agent.
+        active_ids = [aid for aid in self.environment.agent_ids if self.get_agent(aid) is not None]
 
         # Environments may implement async prepare_tick() to refresh observations first.
         prepare = getattr(self.environment, "prepare_tick", None)
@@ -250,7 +260,8 @@ class Runner:
 
         async def _one(aid: str) -> tuple[str, Action, float]:
             agent = self.get_agent(aid)
-            assert agent is not None
+            if agent is None:
+                return aid, NoOpAction(), 0.0
             start = time.monotonic()
             try:
                 action = await asyncio.wait_for(

@@ -135,6 +135,8 @@ class MinecraftObservation(Observation):
 
     # ---- agent's own goal (injected by the environment or runner) ----
     current_goal: str = ""
+    # Boundaries / world rules summary for the LLM
+    world_notes: str = ""
 
     def render(self) -> str:
         """Compact text summary injected into the LLM prompt."""
@@ -143,6 +145,9 @@ class MinecraftObservation(Observation):
             f"Health {self.stats.health}/20 | Food {self.stats.food}/20 "
             f"| Time {self.stats.time_of_day} | Rain: {self.stats.is_raining}",
         ]
+
+        if self.world_notes:
+            lines.append(self.world_notes)
 
         if self.equipped_item:
             lines.append(f"Holding: {self.equipped_item}")

@@ -151,7 +151,7 @@ if (-not $hasProvider -and $env:SIMULATECRAFT_FORCE_RUN -ne "1") {
     Write-Host "    Or 9Router / own API:"
     Write-Host "      OPENAI_BASE_URL=http://localhost:20128/v1"
     Write-Host "      OPENAI_API_KEY=..."
-    Write-Host "      SIMULATECRAFT_MODEL=oc/mimo-v2.5-free"
+    Write-Host "      SIMULATECRAFT_MODEL=oc/space-bunny-free"
     Write-Host "    Docs: https://danyalabbas.github.io/SimulateCraft/llm-providers/"
     Write-Host ""
     Write-Host "    cd `"$TargetDir`"; .\run.ps1"

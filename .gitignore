@@ -16,3 +16,8 @@ events.jsonl
 .simulatecraft_skills.json
 node_modules/
 *.log
+# Local Minecraft worlds + world_settings.json
+data/minecraft/
+data/_import_staging/
+data/uploads/
+data/agent_workshop.json

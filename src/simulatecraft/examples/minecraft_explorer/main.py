@@ -37,7 +37,7 @@ Live browser viewer
         --serve --viewer-port 8000
     # open http://127.0.0.1:8000
 
-Each bot uses a separate Mineflayer process and IPC port (25570, 25571, ...).
+Each bot uses a separate Mineflayer process and IPC port (35670, 35671, ...).
 Prerequisites:
     Node.js >= 18   →  https://nodejs.org
     npm install     →  cd src/simulatecraft/minecraft/bot && npm install
@@ -93,6 +93,7 @@ def build(
     tick_rate: float,
     max_ticks: int,
     mc_version: str | None = None,
+    map_radius: int = 512,
 ) -> tuple[MinecraftEnvironment, Runner]:
     env = MinecraftEnvironment(
         server_host=host,
@@ -101,6 +102,7 @@ def build(
         block_scan_radius=6,
         entity_scan_radius=16,
         chat_log_size=20,
+        map_pan_limit=map_radius,
     )
     runner = Runner(
         environment=env,
@@ -116,7 +118,7 @@ def build(
         if name not in AGENT_REGISTRY:
             raise ValueError(f"Unknown agent '{name}'. Choose from: {', '.join(AGENT_REGISTRY)}")
         factory, username, goal = AGENT_REGISTRY[name]
-        ipc_port = 25570 + i
+        ipc_port = 35670 + i
         env.add_bot(name, username=username, ipc_port=ipc_port, goal=goal)
         brain = factory(model)
         runner.add_agent(
@@ -139,8 +141,18 @@ async def run_headless(
     max_ticks: int,
     log_file: str | None,
     mc_version: str | None = None,
+    map_radius: int = 512,
 ) -> None:
-    env, runner = build(host, port, agent_names, model, tick_rate, max_ticks, mc_version=mc_version)
+    env, runner = build(
+        host,
+        port,
+        agent_names,
+        model,
+        tick_rate,
+        max_ticks,
+        mc_version=mc_version,
+        map_radius=map_radius,
+    )
     _attach_progress(runner.bus)
     if log_file:
         JsonlLogger(log_file, runner.bus)
@@ -164,10 +176,20 @@ async def run_with_server(
     viewer_port: int,
     log_file: str | None,
     mc_version: str | None = None,
+    map_radius: int = 512,
 ) -> None:
     from simulatecraft.server import SimulationServer
 
-    env, runner = build(host, port, agent_names, model, tick_rate, max_ticks, mc_version=mc_version)
+    env, runner = build(
+        host,
+        port,
+        agent_names,
+        model,
+        tick_rate,
+        max_ticks,
+        mc_version=mc_version,
+        map_radius=map_radius,
+    )
     _attach_progress(runner.bus)
     if log_file:
         JsonlLogger(log_file, runner.bus)
@@ -220,6 +242,13 @@ def main() -> None:
     )
     parser.add_argument("--ticks", type=int, default=200, help="Max simulation ticks")
     parser.add_argument("--tick-rate", type=float, default=1.0, help="Ticks per second")
+    parser.add_argument(
+        "--map-radius",
+        type=int,
+        default=512,
+        metavar="BLOCKS",
+        help="Live viewer map half-side in blocks around spawn home (default 512)",
+    )
     parser.add_argument("--serve", action="store_true", help="Launch browser viewer")
     parser.add_argument("--viewer-host", default="127.0.0.1")
     parser.add_argument("--viewer-port", type=int, default=8000)
@@ -245,6 +274,7 @@ def main() -> None:
                 args.viewer_port,
                 args.log,
                 args.mc_version,
+                map_radius=args.map_radius,
             )
         )
     else:
@@ -258,6 +288,7 @@ def main() -> None:
                 args.ticks,
                 args.log,
                 args.mc_version,
+                map_radius=args.map_radius,
             )
         )
 

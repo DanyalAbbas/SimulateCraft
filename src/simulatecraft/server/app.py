@@ -7,9 +7,9 @@ import contextlib
 import json
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -23,8 +23,24 @@ from ..core.events import (
     TickCompleted,
 )
 from ..core.runner import Runner
-from .agents import AgentCreateRequest, AgentCreateResponse, create_agent, delete_agent
+from .agents import (
+    AgentCreateRequest,
+    AgentCreateResponse,
+    BulkAgentCreateResponse,
+    create_agent,
+    create_agents_from_roster,
+    delete_agent,
+)
+from .persona import GeneratePromptRequest, GeneratePromptResponse, generate_persona
 from .roles import WatcherRoleRequest, WatcherRoleResponse, assign_watcher_role
+from .workshop_settings import (
+    AgentWorkshopSettings,
+    apply_roster_preset,
+    expected_headers_hint,
+    load_workshop_settings,
+    save_workshop_settings,
+)
+from .workshop_settings import settings_public_dict as workshop_public_dict
 
 log = logging.getLogger(__name__)
 
@@ -150,6 +166,87 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
             log.exception("agent create failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.post("/api/agents/generate-prompt")
+    async def post_generate_prompt(body: GeneratePromptRequest) -> GeneratePromptResponse:
+        """Expand rough notes into a structured system prompt / persona.
+
+        Uses the configurable generator instructions from
+        ``GET/PUT /api/agents/workshop`` unless ``instructions`` is provided.
+        """
+        try:
+            return await generate_persona(
+                text=body.text,
+                name=body.name,
+                use_llm=body.use_llm,
+                model=body.model,
+                instructions=body.instructions,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("generate-prompt failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/agents/workshop")
+    async def get_agent_workshop() -> dict[str, Any]:
+        settings = load_workshop_settings()
+        return {
+            **workshop_public_dict(settings),
+            "expected_headers": expected_headers_hint(settings),
+        }
+
+    @app.put("/api/agents/workshop")
+    async def put_agent_workshop(body: AgentWorkshopSettings) -> dict[str, Any]:
+        settings = save_workshop_settings(body)
+        return {
+            **workshop_public_dict(settings),
+            "expected_headers": expected_headers_hint(settings),
+        }
+
+    @app.post("/api/agents/workshop/preset/{name}")
+    async def post_agent_workshop_preset(name: str) -> dict[str, Any]:
+        """Load a built-in roster column preset (``university`` or ``minimal``)."""
+        if name.strip().lower() not in {"university", "minimal"}:
+            raise HTTPException(status_code=400, detail="Unknown preset (use university|minimal)")
+        settings = apply_roster_preset(name)
+        return {
+            **workshop_public_dict(settings),
+            "expected_headers": expected_headers_hint(settings),
+        }
+
+    @app.post("/api/agents/bulk")
+    async def post_agents_bulk(
+        file: Annotated[UploadFile, File()],
+        spawn_x: float | None = None,
+        spawn_y: float | None = None,
+        spawn_z: float | None = None,
+    ) -> BulkAgentCreateResponse:
+        """Spawn many agents from a CSV or Excel roster.
+
+        Column mapping is configurable via ``/api/agents/workshop`` (defaults
+        to a university-style Name / Role / Department / Big Five roster).
+        """
+        name = file.filename or "agents.csv"
+        content = await file.read()
+        if len(content) > 8 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Roster file too large (max 8MB)")
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file")
+        try:
+            return await create_agents_from_roster(
+                runner,
+                filename=name,
+                data=content,
+                spawn_x=spawn_x,
+                spawn_y=spawn_y,
+                spawn_z=spawn_z,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("bulk agent create failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     @app.delete("/api/agents/{agent_id}")
     async def remove_agent(agent_id: str) -> dict[str, Any]:
         try:
@@ -171,6 +268,163 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
             log.exception("watcher role assign failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.get("/api/world/settings")
+    async def get_world_settings() -> dict[str, Any]:
+        from simulatecraft.minecraft.world_settings import load_settings, settings_public_dict
+
+        return settings_public_dict(load_settings())
+
+    @app.put("/api/world/settings")
+    async def put_world_settings(body: dict[str, Any]) -> dict[str, Any]:
+        from simulatecraft.minecraft.world_settings import (
+            WorldSettings,
+            apply_boundaries_via_rcon,
+            apply_rules_via_rcon,
+            load_settings,
+            save_settings,
+            settings_public_dict,
+        )
+
+        try:
+            settings = WorldSettings.model_validate(body)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        previous = load_settings()
+        applied: list[str] = []
+        barrier_cmds = 0
+        apply_error: str | None = None
+
+        try:
+            applied = apply_rules_via_rcon(settings.rules)
+        except Exception as exc:
+            apply_error = str(exc)
+            log.warning("world rules apply failed: %s", exc)
+
+        try:
+            results, updated_bounds = apply_boundaries_via_rcon(
+                settings.boundaries,
+                previous=previous.boundaries,
+            )
+            barrier_cmds = len(results)
+            settings.boundaries = updated_bounds
+        except Exception as exc:
+            msg = f"barriers: {exc}"
+            apply_error = f"{apply_error}; {msg}" if apply_error else msg
+            log.warning("world barriers apply failed: %s", exc)
+
+        save_settings(settings)
+        env = runner.environment
+        if hasattr(env, "reload_world_settings"):
+            env.reload_world_settings()
+
+        return {
+            "ok": True,
+            "settings": settings_public_dict(settings),
+            "applied_commands": applied,
+            "barrier_commands": barrier_cmds,
+            "apply_error": apply_error,
+        }
+
+    @app.post("/api/map/preload")
+    async def post_map_preload(body: dict[str, Any]) -> dict[str, Any]:
+        """Teleport a bot across an XZ box and scan map tiles (no live stream)."""
+        try:
+            return await _handle_map_preload(runner, body, ws=None)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("map preload failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/api/world/import")
+    async def post_world_import(
+        file: Annotated[UploadFile, File()],
+    ) -> dict[str, Any]:
+        """Upload a .zip of a Minecraft Java world (must contain level.dat).
+
+        After import, restart the Minecraft container so ``/data/world`` is loaded.
+        """
+        from simulatecraft.minecraft.world_settings import (
+            data_dir,
+            import_world_zip,
+            settings_public_dict,
+        )
+
+        name = file.filename or "world.zip"
+        if not name.lower().endswith(".zip"):
+            raise HTTPException(status_code=400, detail="Upload a .zip of a Java world folder")
+        uploads = data_dir() / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
+        dest = uploads / name
+        content = await file.read()
+        if len(content) > 512 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="World zip too large (max 512MB)")
+        dest.write_bytes(content)
+        try:
+            settings = import_world_zip(dest, label=Path(name).stem)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("world import failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        env = runner.environment
+        if hasattr(env, "reload_world_settings"):
+            env.reload_world_settings()
+        return {
+            "ok": True,
+            "settings": settings_public_dict(settings),
+            "restart_required": True,
+            "hint": (
+                "Run: docker compose down && docker compose up -d (or POST /api/world/restart)"
+            ),
+        }
+
+    @app.post("/api/world/restart")
+    async def post_world_restart() -> dict[str, Any]:
+        """Restart the bundled Docker Minecraft server to pick up an imported world."""
+        import shutil
+        import subprocess
+
+        docker = shutil.which("docker")
+        if not docker:
+            raise HTTPException(status_code=500, detail="docker not found on PATH")
+        from simulatecraft.minecraft.world_settings import repo_root
+
+        compose = repo_root() / "docker-compose.yml"
+        if not compose.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"docker-compose.yml not found at {compose}",
+            )
+        try:
+            subprocess.run(
+                [docker, "compose", "-f", str(compose), "down"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                [docker, "compose", "-f", str(compose), "up", "-d"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=exc.stderr or exc.stdout or str(exc),
+            ) from exc
+        return {
+            "ok": True,
+            "message": (
+                "Minecraft container restarted. Wait until the world finishes "
+                "loading, then refresh agents."
+            ),
+        }
+
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
         await ws.accept()
@@ -186,7 +440,7 @@ def create_app(runner: Runner, *, state_push_interval: float = 0.5) -> FastAPI:
                 raw = await ws.receive_text()
                 try:
                     message = json.loads(raw)
-                    await _handle_client_message(runner, message, ws)
+                    await _handle_client_message(runner, message, ws, broadcaster=broadcaster)
                 except (json.JSONDecodeError, KeyError, ValueError) as exc:
                     log.warning("bad inbound ws message: %s (%s)", raw[:120], exc)
         except WebSocketDisconnect:
@@ -272,7 +526,11 @@ async def _apply_control(
 
 
 async def _handle_client_message(
-    runner: Runner, message: dict[str, Any], ws: WebSocket | None = None
+    runner: Runner,
+    message: dict[str, Any],
+    ws: WebSocket | None = None,
+    *,
+    broadcaster: WebsocketBroadcaster | None = None,
 ) -> None:
     msg_type = message.get("type")
     if msg_type == "chat":
@@ -298,26 +556,153 @@ async def _handle_client_message(
         origin_x = int(message["origin_x"])
         origin_z = int(message["origin_z"])
         size = int(message.get("size") or 128)
-        map_data = await fetch(origin_x, origin_z, size)
+        try:
+            map_data = await fetch(origin_x, origin_z, size)
+        except Exception as exc:
+            log.warning("map tile fetch failed: %s", exc)
+            map_data = {
+                "origin_x": origin_x,
+                "origin_z": origin_z,
+                "width": size,
+                "height": size,
+                "pixels": "",
+            }
         if ws is not None:
-            await ws.send_text(json.dumps({"type": "map", "map": map_data}))
+            with contextlib.suppress(Exception):
+                await ws.send_text(json.dumps({"type": "map", "map": map_data or {}}))
+    elif msg_type == "map_preload":
+        # Run in the background so the WS receive loop stays alive (preload can
+        # take minutes). Tiles are broadcast to every connected viewer.
+        asyncio.create_task(
+            _handle_map_preload(runner, message, ws, broadcaster=broadcaster),
+            name="map-preload",
+        )
     elif msg_type == "agent_create":
         req = AgentCreateRequest.model_validate(message.get("agent") or message)
         created = await create_agent(runner, req)
         if ws is not None:
-            await ws.send_text(json.dumps({"type": "agent_created", **created.model_dump()}))
+            with contextlib.suppress(Exception):
+                await ws.send_text(json.dumps({"type": "agent_created", **created.model_dump()}))
     elif msg_type == "agent_delete":
         agent_id = str(message["agent_id"])
         deleted = await delete_agent(runner, agent_id)
         if ws is not None:
-            await ws.send_text(json.dumps({"type": "agent_deleted", **deleted}))
+            with contextlib.suppress(Exception):
+                await ws.send_text(json.dumps({"type": "agent_deleted", **deleted}))
     elif msg_type == "watcher_role":
         role_req = WatcherRoleRequest.model_validate(message.get("watcher") or message)
         assigned = assign_watcher_role(role_req)
         if ws is not None:
-            await ws.send_text(json.dumps({"type": "watcher_role", **assigned.model_dump()}))
+            with contextlib.suppress(Exception):
+                await ws.send_text(json.dumps({"type": "watcher_role", **assigned.model_dump()}))
     else:
         raise ValueError(f"unknown inbound type {msg_type!r}")
+
+
+async def _ws_broadcast(
+    payload: dict[str, Any],
+    *,
+    ws: WebSocket | None = None,
+    broadcaster: WebsocketBroadcaster | None = None,
+) -> None:
+    """Send JSON to all live viewers (or a single socket). Never raises on closed sockets."""
+    text = json.dumps(payload)
+    targets: list[WebSocket] = []
+    if broadcaster is not None:
+        targets.extend(list(broadcaster.clients))
+    elif ws is not None:
+        targets.append(ws)
+    dead: list[WebSocket] = []
+    for client in targets:
+        try:
+            await client.send_text(text)
+        except Exception:
+            dead.append(client)
+    if broadcaster is not None:
+        for d in dead:
+            broadcaster.clients.discard(d)
+
+
+async def _handle_map_preload(
+    runner: Runner,
+    message: dict[str, Any],
+    ws: WebSocket | None = None,
+    *,
+    broadcaster: WebsocketBroadcaster | None = None,
+) -> dict[str, Any]:
+    """Teleport a bot across a region and stream map tiles back to viewers."""
+    env = runner.environment
+    preload = getattr(env, "preload_map_region", None)
+    if not callable(preload):
+        err = "environment does not support map preload"
+        await _ws_broadcast(
+            {"type": "map_preload_error", "error": err},
+            ws=ws,
+            broadcaster=broadcaster,
+        )
+        return {"ok": False, "error": err}
+
+    try:
+        min_x = float(message["min_x"])
+        max_x = float(message["max_x"])
+        min_z = float(message["min_z"])
+        max_z = float(message["max_z"])
+    except (KeyError, TypeError, ValueError):
+        err = "map_preload requires min_x, max_x, min_z, max_z"
+        await _ws_broadcast(
+            {"type": "map_preload_error", "error": err},
+            ws=ws,
+            broadcaster=broadcaster,
+        )
+        return {"ok": False, "error": err}
+
+    y = message.get("y")
+    settle = message.get("settle_seconds")
+    max_tiles = message.get("max_tiles")
+    workers = message.get("workers")
+
+    async def on_tile(tile_data: dict[str, Any], current: int, total: int) -> None:
+        await _ws_broadcast({"type": "map", "map": tile_data or {}}, ws=ws, broadcaster=broadcaster)
+        await _ws_broadcast(
+            {"type": "map_preload_progress", "current": current, "total": total},
+            ws=ws,
+            broadcaster=broadcaster,
+        )
+
+    kwargs: dict[str, Any] = {"on_tile": on_tile}
+    if y is not None:
+        kwargs["y"] = float(y)
+    if settle is not None:
+        kwargs["settle_seconds"] = float(settle)
+    if max_tiles is not None:
+        kwargs["max_tiles"] = int(max_tiles)
+    if workers is not None:
+        kwargs["workers"] = int(workers)
+
+    try:
+        result = await preload(min_x, max_x, min_z, max_z, **kwargs)
+    except (ValueError, RuntimeError) as exc:
+        await _ws_broadcast(
+            {"type": "map_preload_error", "error": str(exc)},
+            ws=ws,
+            broadcaster=broadcaster,
+        )
+        return {"ok": False, "error": str(exc)}
+    except Exception as exc:
+        log.exception("map preload failed")
+        await _ws_broadcast(
+            {"type": "map_preload_error", "error": str(exc)},
+            ws=ws,
+            broadcaster=broadcaster,
+        )
+        return {"ok": False, "error": str(exc)}
+
+    await _ws_broadcast(
+        {"type": "map_preload_done", **(result or {})},
+        ws=ws,
+        broadcaster=broadcaster,
+    )
+    return result or {}
 
 
 class SimulationServer:
@@ -346,7 +731,33 @@ class SimulationServer:
 
     def start_simulation(self) -> None:
         if self._sim_task is None or self._sim_task.done():
-            self._sim_task = asyncio.create_task(self.runner.start())
+            self._sim_task = asyncio.create_task(self._run_simulation_forever())
+
+    async def _run_simulation_forever(self) -> None:
+        """Keep the viewer loop alive across crashes (e.g. mid-spawn races)."""
+        while True:
+            try:
+                await self.runner.start()
+            except Exception:
+                log.exception("Simulation crashed; restarting in 0.5s")
+                await asyncio.sleep(0.5)
+                continue
+            reason = self.runner._stop_reason
+            if reason in {"server_shutdown", "server_control", "human_stop"}:
+                return
+            if reason == "max_ticks":
+                # Live viewer: extend and keep going instead of freezing the UI.
+                self.runner.extend_max_ticks(10_000)
+                log.info(
+                    "Hit max_ticks; extended to %s and continuing",
+                    self.runner.config.max_ticks,
+                )
+                continue
+            if reason == "no_agents_left":
+                await asyncio.sleep(1.0)
+                continue
+            # Unexpected clean stop — brief pause then resume.
+            await asyncio.sleep(0.5)
 
     async def serve(self, *, run_simulation: bool = True) -> None:
         import uvicorn

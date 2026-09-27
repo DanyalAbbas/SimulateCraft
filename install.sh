@@ -135,7 +135,7 @@ if [[ "$HAS_PROVIDER" -eq 0 && "${SIMULATECRAFT_FORCE_RUN:-}" != "1" ]]; then
   echo "    Or 9Router / own API:"
   echo "      OPENAI_BASE_URL=http://localhost:20128/v1"
   echo "      OPENAI_API_KEY=..."
-  echo "      SIMULATECRAFT_MODEL=oc/mimo-v2.5-free"
+  echo "      SIMULATECRAFT_MODEL=oc/space-bunny-free"
   echo "    Docs: https://danyalabbas.github.io/SimulateCraft/llm-providers/"
   echo
   echo "    cd \"$TARGET_DIR\" && ./run.sh"

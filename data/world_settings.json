@@ -1,0 +1,75 @@
+{
+  "rules": {
+    "allow_night": true,
+    "daylight_cycle": true,
+    "day_length_minutes": null,
+    "time_of_day": "day",
+    "weather_cycle": true,
+    "clear_weather": true,
+    "mob_griefing": false,
+    "keep_inventory": true,
+    "do_mob_spawning": false,
+    "fire_spreads": false
+  },
+  "boundaries": {
+    "enabled": false,
+    "vertices": [
+      {
+        "x": 360.0,
+        "z": 399.0
+      },
+      {
+        "x": 374.0,
+        "z": 399.0
+      },
+      {
+        "x": 374.0,
+        "z": 413.0
+      },
+      {
+        "x": 360.0,
+        "z": 413.0
+      }
+    ],
+    "corners": [
+      {
+        "x": 360.0,
+        "z": 399.0
+      },
+      {
+        "x": 374.0,
+        "z": 399.0
+      },
+      {
+        "x": 374.0,
+        "z": 413.0
+      },
+      {
+        "x": 360.0,
+        "z": 413.0
+      }
+    ],
+    "min_x": 360.0,
+    "max_x": 374.0,
+    "min_z": 399.0,
+    "max_z": 413.0,
+    "enforce": "off",
+    "place_barriers": true,
+    "wall_y_min": 60,
+    "wall_height": 16,
+    "barriers_built": false,
+    "last_barrier_vertices": [],
+    "last_barrier_y_min": null,
+    "last_barrier_y_max": null,
+    "last_barrier_min_x": null,
+    "last_barrier_max_x": null,
+    "last_barrier_min_z": null,
+    "last_barrier_max_z": null
+  },
+  "world": {
+    "source": "imported",
+    "label": "Yuehua Univ. Affiliated High School",
+    "level_name": "world",
+    "notes": "Restart Minecraft (docker compose down && docker compose up -d) to load this world."
+  }
+}

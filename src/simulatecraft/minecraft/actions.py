@@ -6,11 +6,13 @@ the model's choice arrives already validated — no JSON parsing, no regex.
 
 Categories
 ----------
-- Movement  : Move, Jump, Sneak, Sprint, LookAt
+- Movement  : Move, Jump, Sneak, LookAt
 - World     : MineBlock, PlaceBlock, UseItem, ActivateBlock
-- Inventory : EquipItem, DropItem, Craft
+- Combat    : AttackEntity
+- Survival  : Eat, CollectItem
+- Inventory : EquipItem, DropItem, Craft, GiveItem
 - Social    : Chat, Whisper
-- Navigation: NavigateTo  (Mineflayer pathfinder handles the pathfinding)
+- Navigation: NavigateTo, FollowEntity, CancelPath
 - Meta      : Wait, NoOp
 """
 
@@ -62,11 +64,10 @@ class LookAt(Action):
     """Turn to face a target — block coordinates or entity name."""
 
     kind: Literal["look_at"] = "look_at"
-    # Either block coords OR an entity name (resolved on bot side)
     x: float | None = None
     y: float | None = None
     z: float | None = None
-    entity: str | None = None  # e.g. "creeper", "Steve"
+    entity: str | None = None
 
     def render(self) -> str:
         if self.entity:
@@ -86,7 +87,7 @@ class MineBlock(Action):
     x: int | None = None
     y: int | None = None
     z: int | None = None
-    block_name: str | None = None  # resolve nearest matching block when coords absent
+    block_name: str | None = None
 
     def render(self) -> str:
         if self.block_name and self.x is None:
@@ -135,6 +136,50 @@ class ActivateBlock(Action):
 
 
 # ---------------------------------------------------------------------------
+# Combat / survival
+# ---------------------------------------------------------------------------
+
+
+class AttackEntity(Action):
+    """Melee-attack a nearby player or mob (by name/type, or nearest entity)."""
+
+    kind: Literal["attack"] = "attack"
+    target: str | None = None
+    max_distance: float = 4.0
+
+    def render(self) -> str:
+        if self.target:
+            return f"attack {self.target}"
+        return "attack nearest entity"
+
+
+class Eat(Action):
+    """Eat food from inventory to restore hunger."""
+
+    kind: Literal["eat"] = "eat"
+    item_name: str | None = None
+
+    def render(self) -> str:
+        if self.item_name:
+            return f"eat {self.item_name}"
+        return "eat (any food)"
+
+
+class CollectItem(Action):
+    """Walk to and pick up a nearby dropped item entity."""
+
+    kind: Literal["collect"] = "collect"
+    item_name: str | None = None
+    max_distance: float = 16.0
+    timeout_seconds: float = 6.0
+
+    def render(self) -> str:
+        if self.item_name:
+            return f"collect {self.item_name}"
+        return "collect nearest item"
+
+
+# ---------------------------------------------------------------------------
 # Inventory
 # ---------------------------------------------------------------------------
 
@@ -159,6 +204,18 @@ class DropItem(Action):
 
     def render(self) -> str:
         return f"drop {self.count}x {self.item_name}"
+
+
+class GiveItem(Action):
+    """Toss items toward another player (look at them, then drop)."""
+
+    kind: Literal["give"] = "give"
+    target: str
+    item_name: str
+    count: int = 1
+
+    def render(self) -> str:
+        return f"give {self.count}x {self.item_name} to {self.target}"
 
 
 class Craft(Action):
@@ -222,12 +279,21 @@ class FollowEntity(Action):
     """Follow a named player or mob until the next action."""
 
     kind: Literal["follow"] = "follow"
-    target: str  # player username or mob type
+    target: str
     min_distance: float = 2.0
     timeout_seconds: float = 8.0
 
     def render(self) -> str:
         return f"follow {self.target}"
+
+
+class CancelPath(Action):
+    """Stop pathfinding / following and clear movement controls."""
+
+    kind: Literal["cancel_path"] = "cancel_path"
+
+    def render(self) -> str:
+        return "cancel path"
 
 
 # ---------------------------------------------------------------------------
@@ -258,18 +324,22 @@ MinecraftAction = Annotated[
     | PlaceBlock
     | UseItem
     | ActivateBlock
+    | AttackEntity
+    | Eat
+    | CollectItem
     | EquipItem
     | DropItem
+    | GiveItem
     | Craft
     | Chat
     | Whisper
     | NavigateTo
     | FollowEntity
+    | CancelPath
     | Wait,
     Field(discriminator="kind"),
 ]
 
-# Flat list for passing to LLMBrain(action_types=...)
 ALL_ACTIONS: list[type[Action]] = [
     Move,
     Jump,
@@ -279,12 +349,17 @@ ALL_ACTIONS: list[type[Action]] = [
     PlaceBlock,
     UseItem,
     ActivateBlock,
+    AttackEntity,
+    Eat,
+    CollectItem,
     EquipItem,
     DropItem,
+    GiveItem,
     Craft,
     Chat,
     Whisper,
     NavigateTo,
     FollowEntity,
+    CancelPath,
     Wait,
 ]

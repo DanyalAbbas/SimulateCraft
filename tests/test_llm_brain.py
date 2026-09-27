@@ -276,11 +276,11 @@ def test_openai_compatible_gateway_builds_chat_model(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:20128/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    bare = _build_pydantic_ai_model("oc/mimo-v2.5-free")
+    bare = _build_pydantic_ai_model("oc/space-bunny-free")
     assert isinstance(bare, OpenAIChatModel)
-    assert bare.model_name == "oc/mimo-v2.5-free"
+    assert bare.model_name == "oc/space-bunny-free"
 
-    prefixed = _build_pydantic_ai_model("openai:oc/mimo-v2.5-free")
+    prefixed = _build_pydantic_ai_model("openai:oc/space-bunny-free")
     assert isinstance(prefixed, OpenAIChatModel)
 
     explicit = _build_pydantic_ai_model("openai-compatible:kr/claude-sonnet-4.5")

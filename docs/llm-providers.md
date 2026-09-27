@@ -46,7 +46,7 @@ SIMULATECRAFT_MODEL=openrouter:meta-llama/llama-3.1-8b-instruct:free
 ```bash
 OPENAI_BASE_URL=http://localhost:20128/v1
 OPENAI_API_KEY=<key from 9Router dashboard>
-SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
+SIMULATECRAFT_MODEL=oc/space-bunny-free
 ```
 
 Model ids come from the 9Router dashboard / `GET /v1/models` (e.g. `kr/...`, `oc/...`).
@@ -113,4 +113,4 @@ SIMULATECRAFT_MODEL=test
 | 9Router connection refused | Start 9Router; base URL must include `/v1` |
 | Agents barely chat / act slowly | Use a paid OpenRouter model, 9Router, or your own API — free tiers throttle |
 
-Next: [Use the live viewer](viewer.md)
+Next: [Use the live viewer](viewer/index.md)

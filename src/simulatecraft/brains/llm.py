@@ -13,8 +13,8 @@ Model string formats accepted by LLMBrain / resolve_model()
 - ``"openrouter:anthropic/claude-sonnet-4.6"``             ← OpenRouter paid
 - ``"anthropic:claude-sonnet-4-5"``                        ← direct Anthropic key
 - ``"openai:gpt-4o-mini"``                                  ← direct OpenAI key
-- ``"openai-compatible:oc/mimo-v2.5-free"``                 ← any OpenAI-compatible gateway
-- ``"oc/mimo-v2.5-free"``                                   ← same, when OPENAI_BASE_URL is set
+- ``"openai-compatible:oc/space-bunny-free"``                 ← any OpenAI-compatible gateway
+- ``"oc/space-bunny-free"``                                   ← same, when OPENAI_BASE_URL is set
 - ``"google-gla:gemini-2.0-flash"``                         ← direct Google key
 - ``"test"``                                                ← offline TestModel, no key needed
 
@@ -24,7 +24,7 @@ OpenAI-compatible gateways (9Router, LiteLLM, vLLM, …)
 ------------------------------------------------------
     export OPENAI_BASE_URL=http://localhost:20128/v1
     export OPENAI_API_KEY=<dashboard-key>
-    export SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
+    export SIMULATECRAFT_MODEL=oc/space-bunny-free
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def _build_pydantic_ai_model(model: str | Any) -> Any:
     - ``openrouter:<name>`` → OpenRouterModel
     - ``openai-compatible:<name>`` → OpenAI chat via ``OPENAI_BASE_URL``
       (9Router, LiteLLM, vLLM, LocalAI, …)
-    - When ``OPENAI_BASE_URL`` is set, bare ids like ``oc/mimo-v2.5-free`` and
+    - When ``OPENAI_BASE_URL`` is set, bare ids like ``oc/space-bunny-free`` and
       ``openai:<name>`` also use chat completions against that gateway
       (avoids pydantic-ai's default OpenAI Responses API, which local proxies
       usually do not implement).
@@ -130,7 +130,7 @@ def _make_openai_compatible_model(model_name: str, *, base_url: str | None = Non
             "For 9Router:\n"
             "  export OPENAI_BASE_URL=http://localhost:20128/v1\n"
             "  export OPENAI_API_KEY=<key from 9Router dashboard>\n"
-            "  export SIMULATECRAFT_MODEL=oc/mimo-v2.5-free"
+            "  export SIMULATECRAFT_MODEL=oc/space-bunny-free"
         )
     api_key = os.getenv("OPENAI_API_KEY", "").strip() or "not-needed"
     return OpenAIChatModel(
