@@ -127,9 +127,7 @@ async def create_agent(runner: Runner, req: AgentCreateRequest) -> AgentCreateRe
 
 def _unique_username(runner: Runner, base: str) -> str:
     """Avoid Minecraft username collisions among already-spawned bots."""
-    existing = {
-        (getattr(a, "name", None) or a.id).lower() for a in runner.agents
-    }
+    existing = {(getattr(a, "name", None) or a.id).lower() for a in runner.agents}
     for cfg in getattr(runner.environment, "_bot_configs", {}).values():
         uname = getattr(cfg, "username", None)
         if uname:
@@ -163,8 +161,7 @@ async def create_agents_from_roster(
         try:
             username = _unique_username(runner, profile.minecraft_username())
             persona = (
-                profile.persona.strip()
-                or build_structured_persona(profile, settings=workshop)
+                profile.persona.strip() or build_structured_persona(profile, settings=workshop)
             )[:4000]
             req = AgentCreateRequest(
                 username=username,

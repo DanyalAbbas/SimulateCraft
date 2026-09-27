@@ -884,9 +884,7 @@ class MinecraftEnvironment(Environment):
                 async def mop_worker(member: dict[str, Any], jobs: list[tuple[int, int]]) -> None:
                     nonlocal mop_done
                     for ox, oz in jobs:
-                        tile_data = await scan_one(
-                            member, ox, oz, settle_s=mop_settle, retries=3
-                        )
+                        tile_data = await scan_one(member, ox, oz, settle_s=mop_settle, retries=3)
                         async with mop_lock:
                             mop_done += 1
                             cur = total + mop_done

@@ -34,7 +34,7 @@ DEFAULT_PROMPT_GENERATOR_INSTRUCTIONS = (
     "Given rough notes (and optional draft text), return ONLY the finished "
     "system prompt — no preamble, no markdown fences.\n"
     "Use short markdown sections such as: Identity, Personality, Behaviour, Style.\n"
-    "Keep it under 900 words. Stay second-person (\"You are…\").\n"
+    'Keep it under 900 words. Stay second-person ("You are…").\n'
     "Never mention being an AI or language model. Stay useful inside Minecraft."
 )
 

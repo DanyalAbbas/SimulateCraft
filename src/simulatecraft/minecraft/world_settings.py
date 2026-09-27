@@ -340,10 +340,7 @@ def rcon_commands_for_boundaries(
     """
     cmds: list[str] = []
     prev = previous or bounds
-    if prev.barriers_built and (
-        prev.last_barrier_vertices
-        or prev.last_barrier_min_x is not None
-    ):
+    if prev.barriers_built and (prev.last_barrier_vertices or prev.last_barrier_min_x is not None):
         # Only cheap AABB air clears — never hundreds of per-cell fills.
         cmds.extend(barrier_clear_commands(prev))
 

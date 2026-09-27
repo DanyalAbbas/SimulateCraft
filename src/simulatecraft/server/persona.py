@@ -163,10 +163,7 @@ def build_structured_persona(
     _ = settings  # reserved for future template overrides
     name = (profile.name if profile else None) or "Agent"
     draft_text = (
-        draft
-        or (profile.notes if profile else "")
-        or (profile.persona if profile else "")
-        or ""
+        draft or (profile.notes if profile else "") or (profile.persona if profile else "") or ""
     ).strip()
 
     identity_bits: list[str] = [f"You are {name}"]
@@ -186,9 +183,7 @@ def build_structured_persona(
         for key, score in profile.traits.items():
             band = _trait_band(score)
             label = profile.trait_labels.get(key) or key.replace("_", " ").title()
-            sections.append(
-                f"- {label}: {score:g} ({band}) — {_trait_behaviour(key, band)}"
-            )
+            sections.append(f"- {label}: {score:g} ({band}) — {_trait_behaviour(key, band)}")
 
     attr_lines: list[str] = []
     if profile:
