@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -83,6 +84,7 @@ def test_ensure_minecraft_already_up(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_ensure_minecraft_compose_and_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "_need", lambda name, hint: "/usr/bin/docker")
     monkeypatch.setattr(cli, "_port_open", lambda h, p: False)
+    monkeypatch.setattr(cli, "_configure_world", lambda **k: None)
     monkeypatch.setattr(cli, "_run", lambda *a, **k: None)
     monkeypatch.setattr(cli, "_docker_container_health", lambda *a, **k: "starting")
     monkeypatch.setattr(cli, "_minecraft_logs_ready", lambda *a, **k: False)
@@ -96,7 +98,7 @@ def test_ensure_minecraft_compose_and_timeout(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(cli.time, "time", fake_time)
     monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
     with pytest.raises(SystemExit, match="did not become ready"):
-        cli.ensure_minecraft(skip=False, host="localhost", port=25565)
+        cli.ensure_minecraft(skip=False, host="localhost", port=25565, world_mode="random")
 
 
 def test_minecraft_logs_ready(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,6 +152,26 @@ def test_port_open(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cli._port_open("localhost", 1) is False
 
 
+def test_configure_world_random(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(cli, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(cli, "_existing_world_dir", lambda: None)
+    prepared: list[int] = []
+
+    def fake_prepare(*, seed: int | None = None):
+        from simulatecraft.minecraft.world_settings import WorldImportInfo, WorldSettings
+
+        prepared.append(seed if seed is not None else 7)
+        return WorldSettings(world=WorldImportInfo(label="r")), prepared[-1]
+
+    monkeypatch.setattr(
+        "simulatecraft.minecraft.world_settings.prepare_random_world",
+        fake_prepare,
+    )
+    cli._configure_world(world_mode="random", seed=99)
+    assert prepared == [99]
+    assert cli.os.environ.get("SEED") == "99"
+
+
 def test_main_setup_only(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "setup_node", lambda: None)
     cli.main(["--setup-only"])
@@ -198,6 +220,7 @@ def test_launch_example(monkeypatch: pytest.MonkeyPatch) -> None:
         viewer_port=8000,
         log="events.jsonl",
         mc_version=None,
+        map_radius=512,
     )
     cli.launch_example(args)
     assert called.get("ran") is True

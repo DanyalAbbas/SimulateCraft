@@ -37,7 +37,7 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 _DEFAULT_BOT_SCRIPT = Path(__file__).parent / "bot" / "bot.js"
-_DEFAULT_IPC_PORT = 25570  # local TCP port for Python↔Node JSON RPC
+_DEFAULT_IPC_PORT = 35670  # local TCP port for Python↔Node JSON RPC (not MC/RCON)
 
 
 class BridgeError(Exception):

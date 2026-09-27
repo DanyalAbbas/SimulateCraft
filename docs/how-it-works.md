@@ -31,9 +31,10 @@ orchestrator; Node only talks to the game. One Node process per agent.
 
 ## Memory (optional depth)
 
-Each brain can keep a memory stream, retrieve relevant bits, occasionally
-reflect, and reuse verified “skills” (short action sequences). You can ignore
-this until you customize agents.
+Each brain keeps an in-memory stream (RAM only — not persisted). Retrieval
+scores memories with **cosine** similarity plus recency and importance, then
+feeds the top hits into the decide prompt. Reflections and reusable skills are
+optional extras.
 
 ## Where to look in the repo
 

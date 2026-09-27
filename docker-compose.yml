@@ -11,9 +11,14 @@ services:
       ONLINE_MODE: "FALSE"
       MEMORY: "2G"
       TYPE: VANILLA
+      LEVEL: "world"
+      SEED: ${SEED:-}
       ENABLE_RCON: "true"
       RCON_PORT: "25575"
       RCON_PASSWORD: "simulatecraft"
+    volumes:
+      # Persist / import worlds here (place a Java world folder at data/minecraft/world)
+      - ./data/minecraft:/data
     tty: true
     stdin_open: true
     restart: unless-stopped

@@ -311,10 +311,11 @@ def test_cli_compose_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(cli, "_need", lambda name, hint: "/usr/bin/docker")
     monkeypatch.setattr(cli, "_port_open", lambda h, p: False)
+    monkeypatch.setattr(cli, "_configure_world", lambda **k: None)
     monkeypatch.setattr(cli, "_run", lambda *a, **k: None)
     monkeypatch.setattr(cli, "_docker_container_health", lambda *a, **k: "healthy")
     monkeypatch.setattr(cli.time, "sleep", lambda *_: None)
-    cli.ensure_minecraft(skip=False, host="localhost", port=25565)
+    cli.ensure_minecraft(skip=False, host="localhost", port=25565, world_mode="random")
 
 
 def test_ws_map_message() -> None:
@@ -341,3 +342,58 @@ def test_ws_map_message() -> None:
                 got = True
                 break
         assert got
+
+
+def test_ws_map_preload_message() -> None:
+    from fastapi.testclient import TestClient
+
+    from simulatecraft.server.app import create_app
+
+    env = StubEnvironment()
+    runner = Runner(environment=env, config=RunnerConfig(max_ticks=50, tick_rate=50))
+    env.reset()
+
+    async def preload_map_region(
+        min_x: float,
+        max_x: float,
+        min_z: float,
+        max_z: float,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        on_tile = kwargs.get("on_tile")
+        tile = {
+            "origin_x": 0,
+            "origin_z": 0,
+            "width": 128,
+            "height": 128,
+            "pixels": "",
+            "coverage": 0.0,
+        }
+        if on_tile is not None:
+            maybe = on_tile(tile, 1, 1)
+            if hasattr(maybe, "__await__"):
+                await maybe
+        return {"ok": True, "tiles": 1, "scanned": 1, "pan_limit": 512}
+
+    env.preload_map_region = preload_map_region  # type: ignore[attr-defined]
+    app = create_app(runner)
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        assert ws.receive_json()["type"] == "state"
+        ws.send_json(
+            {
+                "type": "map_preload",
+                "min_x": 0,
+                "max_x": 10,
+                "min_z": 0,
+                "max_z": 10,
+            }
+        )
+        kinds: list[str] = []
+        for _ in range(40):
+            msg = ws.receive_json()
+            kinds.append(msg.get("type", ""))
+            if msg.get("type") == "map_preload_done":
+                break
+        assert "map" in kinds
+        assert "map_preload_progress" in kinds
+        assert "map_preload_done" in kinds

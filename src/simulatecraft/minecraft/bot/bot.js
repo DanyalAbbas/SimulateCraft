@@ -38,7 +38,7 @@ const args = (() => {
 const MC_HOST = args.host || "localhost";
 const MC_PORT = parseInt(args.port || "25565", 10);
 const USERNAME = args.username || "SimBot";
-const IPC_PORT = parseInt(args["ipc-port"] || "25570", 10);
+const IPC_PORT = parseInt(args["ipc-port"] || "35670", 10);
 const AUTH = args.auth || "offline";
 const PASSWORD = args.password || undefined;
 const VERSION = args.version || undefined;
@@ -109,6 +109,11 @@ const ipcServer = net.createServer((socket) => {
   });
 });
 
+ipcServer.on("error", (err) => {
+  console.error(`[ipc] listen failed on 127.0.0.1:${IPC_PORT}: ${err.message}`);
+  process.exit(1);
+});
+
 ipcServer.listen(IPC_PORT, "127.0.0.1", () => {
   console.log(`[ipc] Listening on 127.0.0.1:${IPC_PORT}`);
 });
@@ -139,6 +144,14 @@ bot.once("spawn", () => {
     position: _pos(),
     gameMode: bot.game && bot.game.gameMode,
   });
+});
+
+bot.on("death", () => {
+  pushEvent("bot.death", { username: bot.username, position: _pos() });
+});
+
+bot.on("respawn", () => {
+  pushEvent("bot.respawn", { username: bot.username, position: _pos() });
 });
 
 bot.on("chat", (username, message) => {
@@ -374,6 +387,7 @@ function _filledMap(originX, originZ, size) {
   const yTop = Math.min(ey + 20, 320);
   const yBot = Math.max(ey - 16, -64);
   let lastY = ey;
+  let known = 0;
 
   for (let iz = 0; iz < size; iz++) {
     for (let ix = 0; ix < size; ix++) {
@@ -397,6 +411,7 @@ function _filledMap(originX, originZ, size) {
       if (name === "unknown") {
         color = [196, 178, 130]; // unexplored parchment
       } else {
+        known += 1;
         const base = MAP_COLORS[_mapColorName(name)] || MAP_COLORS.stone;
         let brightness = 1;
         if (iz > 0) {
@@ -412,12 +427,14 @@ function _filledMap(originX, originZ, size) {
     }
   }
 
+  const total = size * size;
   return {
     origin_x: originX,
     origin_z: originZ,
     width: size,
     height: size,
     format: "rgb",
+    coverage: total ? known / total : 0,
     pixels: rgb.toString("base64"),
   };
 }
@@ -733,6 +750,179 @@ async function executeAction(rpcId, action) {
         await sleep(timeout);
         bot.pathfinder.setGoal(null);
         sendResult(rpcId, { ok: true });
+        break;
+      }
+
+      case "cancel_path": {
+        try { bot.pathfinder.setGoal(null); } catch (_) { /* no pathfinder */ }
+        ["forward", "back", "left", "right", "sprint", "jump", "sneak"].forEach((c) => {
+          try { bot.setControlState(c, false); } catch (_) { /* ignore */ }
+        });
+        sendResult(rpcId, { ok: true });
+        break;
+      }
+
+      case "attack": {
+        const maxDist = action.max_distance || 4;
+        let target = null;
+        if (action.target) {
+          const want = String(action.target).toLowerCase();
+          target = Object.values(bot.entities).find((e) => {
+            if (!e || e === bot.entity) return false;
+            const label = (e.username || e.name || e.displayName || "").toLowerCase();
+            return label === want || label.includes(want);
+          });
+        } else {
+          // Prefer nearest living non-self entity within range.
+          let best = null;
+          let bestDist = maxDist;
+          for (const e of Object.values(bot.entities)) {
+            if (!e || e === bot.entity || !e.position) continue;
+            if (e.type === "object" || e.type === "orb") continue;
+            const d = bot.entity.position.distanceTo(e.position);
+            if (d <= bestDist) {
+              best = e;
+              bestDist = d;
+            }
+          }
+          target = best;
+        }
+        if (!target) {
+          sendResult(rpcId, { ok: false, reason: "no attack target in range" });
+          break;
+        }
+        const dist = bot.entity.position.distanceTo(target.position);
+        if (dist > maxDist) {
+          sendResult(rpcId, { ok: false, reason: `target too far (${dist.toFixed(1)}m)` });
+          break;
+        }
+        try {
+          await bot.lookAt(target.position.offset(0, target.height ? target.height * 0.8 : 1, 0));
+          bot.attack(target);
+          sendResult(rpcId, {
+            ok: true,
+            attacked: target.username || target.name || "entity",
+            distance: Number(dist.toFixed(2)),
+          });
+        } catch (err) {
+          sendResult(rpcId, { ok: false, reason: String(err.message || err) });
+        }
+        break;
+      }
+
+      case "eat": {
+        const mcData = require("minecraft-data")(bot.version);
+        let item = null;
+        if (action.item_name) {
+          const itemData = mcData.itemsByName[action.item_name];
+          if (!itemData) { sendResult(rpcId, { ok: false, reason: "unknown item" }); break; }
+          item = bot.inventory.findInventoryItem(itemData.id, null);
+          if (!item) {
+            sendResult(rpcId, { ok: false, reason: `no ${action.item_name} in inventory` });
+            break;
+          }
+        } else {
+          // First inventory item that minecraft-data marks as food.
+          for (const inv of bot.inventory.items()) {
+            const def = mcData.items[inv.type];
+            if (def && def.food) {
+              item = inv;
+              break;
+            }
+          }
+          // Fallback: common food names if food flag missing on this version.
+          if (!item) {
+            const foods = [
+              "cooked_beef", "cooked_porkchop", "cooked_chicken", "cooked_mutton",
+              "cooked_salmon", "cooked_cod", "bread", "apple", "baked_potato",
+              "carrot", "golden_carrot", "cookie", "melon_slice", "beef", "porkchop",
+              "chicken", "mutton", "cod", "salmon", "sweet_berries", "glow_berries",
+            ];
+            for (const name of foods) {
+              const id = mcData.itemsByName[name]?.id;
+              if (id == null) continue;
+              item = bot.inventory.findInventoryItem(id, null);
+              if (item) break;
+            }
+          }
+        }
+        if (!item) {
+          sendResult(rpcId, { ok: false, reason: "no food in inventory" });
+          break;
+        }
+        try {
+          await bot.equip(item, "hand");
+          await bot.consume();
+          sendResult(rpcId, { ok: true, ate: item.name });
+        } catch (err) {
+          sendResult(rpcId, { ok: false, reason: String(err.message || err) });
+        }
+        break;
+      }
+
+      case "collect": {
+        const maxDist = action.max_distance || 16;
+        const timeout = Math.min((action.timeout_seconds || 6), 12) * 1000;
+        let drop = null;
+        let bestDist = maxDist;
+        for (const e of Object.values(bot.entities)) {
+          if (!e || !e.position) continue;
+          // Mineflayer marks dropped items as name === "item"
+          if (e.name !== "item") continue;
+          const d = bot.entity.position.distanceTo(e.position);
+          if (d <= bestDist) {
+            drop = e;
+            bestDist = d;
+          }
+        }
+        if (!drop) {
+          sendResult(rpcId, { ok: false, reason: "no item drops nearby" });
+          break;
+        }
+        try {
+          const goal = new goals.GoalNear(drop.position.x, drop.position.y, drop.position.z, 1);
+          await Promise.race([
+            bot.pathfinder.goto(goal),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), timeout)),
+          ]);
+          sendResult(rpcId, { ok: true, collected_near: true, distance: Number(bestDist.toFixed(2)) });
+        } catch (err) {
+          try { bot.pathfinder.setGoal(null); } catch (_) { /* ignore */ }
+          sendResult(rpcId, { ok: false, reason: String(err.message || err) });
+        }
+        break;
+      }
+
+      case "give": {
+        const targetName = (action.target || "").toLowerCase();
+        const player = Object.values(bot.entities).find(
+          (e) => (e.username || "").toLowerCase() === targetName
+        );
+        if (!player) {
+          sendResult(rpcId, { ok: false, reason: `player not found: ${action.target}` });
+          break;
+        }
+        const mcData = require("minecraft-data")(bot.version);
+        const itemData = mcData.itemsByName[action.item_name];
+        if (!itemData) { sendResult(rpcId, { ok: false, reason: "unknown item" }); break; }
+        const item = bot.inventory.findInventoryItem(itemData.id, null);
+        if (!item) {
+          sendResult(rpcId, { ok: false, reason: `item not in inventory: ${action.item_name}` });
+          break;
+        }
+        const count = Math.min(action.count || 1, item.count);
+        try {
+          await bot.lookAt(player.position.offset(0, player.height ? player.height * 0.8 : 1.6, 0));
+          await bot.toss(item.type, item.metadata, count);
+          sendResult(rpcId, {
+            ok: true,
+            gave: item.name,
+            count,
+            to: player.username || action.target,
+          });
+        } catch (err) {
+          sendResult(rpcId, { ok: false, reason: String(err.message || err) });
+        }
         break;
       }
 

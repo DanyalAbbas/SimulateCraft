@@ -14,7 +14,8 @@ the simulation.
 |---|---|
 | [First run](getting-started.md) | One-line install, set a provider, launch with `run.ps1` / `run.sh` |
 | [Connect an LLM](llm-providers.md) | OpenRouter, 9Router, own API, or Groq |
-| [Use the live viewer](viewer.md) | Map, spawn agents, chat, pause / speed |
+| [Use the live viewer](viewer/index.md) | Map, spawn / bulk agents, workshop, chat, pause / speed |
+| [Worlds, boundaries & rules](worlds.md) | Import a world, draw a play square, day/night rules |
 | [How it works](how-it-works.md) | Big picture of the tick loop (no API dump) |
 | [Contributing](contributing.md) | Dev setup if you want to change the code |
 

@@ -832,6 +832,74 @@ canvas {
 .agent-form select:focus,
 #watcher-role:focus { border-color: var(--grass); }
 
+.prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.prompt-actions .mc-btn {
+  flex: 0 0 auto;
+}
+
+.prompt-llm-toggle {
+  flex: 1 1 auto;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.agent-form input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  color: var(--ink);
+  background: #1e1e1e;
+  border: 2px solid #111;
+  box-shadow: inset 1px 1px 0 #444;
+  padding: 8px 10px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.workshop-columns {
+  display: grid;
+  gap: 8px;
+}
+
+.workshop-column-row {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 2px solid #111;
+  background: #181818;
+  box-shadow: inset 1px 1px 0 #333;
+}
+
+.workshop-column-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.workshop-column-row label {
+  margin: 0;
+}
+
+.workshop-column-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.workshop-column-actions .mc-btn {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+}
+
 .field-role {
   position: relative;
   z-index: 5;
@@ -885,7 +953,65 @@ canvas {
   line-height: 1.35;
 }
 
+.check-list {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+
+.agent-form label.check-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 0;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.agent-form label.check-row input[type="checkbox"] {
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  max-width: 16px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: var(--grass);
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
 .map-viewport.is-pinning { cursor: crosshair; }
+
+.corner-pin-marker {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid #111;
+  background: var(--grass-light);
+  color: #111;
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 4;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
 
 .spawn-pin {
   position: absolute;

@@ -96,7 +96,14 @@ nav:
   - Tutorials:
       - First run: getting-started.md
       - Connect an LLM: llm-providers.md
-      - Use the live viewer: viewer.md
+      - Use the live viewer:
+          - Overview: viewer/index.md
+          - Map & controls: viewer/map.md
+          - Agents: viewer/agents.md
+          - World: viewer/world.md
+          - Chat & log: viewer/chat.md
+          - Watchers: viewer/watchers.md
+      - Worlds, boundaries & rules: worlds.md
   - How it works: how-it-works.md
   - Contributing: contributing.md
   - API reference: reference/

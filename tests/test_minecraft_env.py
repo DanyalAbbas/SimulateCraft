@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -52,8 +53,8 @@ def test_add_bot_and_ports() -> None:
     env = MinecraftEnvironment()
     env.add_bot("a", username="Alex", goal="explore")
     env.add_bot("b", username="Bea")
-    assert env._bot_configs["a"].ipc_port == 25570
-    assert env._bot_configs["b"].ipc_port == 25571
+    assert env._bot_configs["a"].ipc_port == 35670
+    assert env._bot_configs["b"].ipc_port == 35671
     with pytest.raises(ValueError, match="already"):
         env.add_bot("a")
 
@@ -75,6 +76,8 @@ def test_parse_state_and_observe() -> None:
 async def test_step_rewards() -> None:
     env = MinecraftEnvironment()
     env.add_bot("a")
+    # Isolate from any local data/world_settings.json boundaries.
+    env._world_settings.boundaries.enabled = False
     bridge = AsyncMock()
     env._bridges["a"] = bridge
 
@@ -131,7 +134,132 @@ async def test_fetch_map_and_snapshot() -> None:
     assert snap2.agents["a"]["position"] == [0.0, 0.0]
 
     env2 = MinecraftEnvironment()
-    assert await env2.fetch_map(0, 0) == {}
+    empty = await env2.fetch_map(0, 0)
+    assert empty["pixels"] == ""
+    assert empty["origin_x"] == 0
+
+
+def test_map_pan_limit_constructor() -> None:
+    env = MinecraftEnvironment(map_pan_limit=2048)
+    assert env.map_pan_limit == 2048
+    env_small = MinecraftEnvironment(map_pan_limit=10)
+    assert env_small.map_pan_limit == 128  # floor
+    env_huge = MinecraftEnvironment(map_pan_limit=1_500_000)
+    assert env_huge.map_pan_limit == 8192  # cap
+
+
+def test_map_tile_origins() -> None:
+    origins = MinecraftEnvironment.map_tile_origins(-10, 130, -10, 130, tile=128)
+    assert origins == [
+        (-128, -128),
+        (-128, 0),
+        (-128, 128),
+        (0, -128),
+        (0, 0),
+        (0, 128),
+        (128, -128),
+        (128, 0),
+        (128, 128),
+    ]
+    assert MinecraftEnvironment.map_tile_origins(0, 0, 0, 0, tile=128) == [(0, 0)]
+
+
+async def test_preload_map_region(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = MinecraftEnvironment(map_pan_limit=128)
+    env.add_bot("a", username="Alex")
+    bridge = AsyncMock()
+    bridge.configure_presence = AsyncMock(return_value={"ok": True})
+    bridge.get_map = AsyncMock(
+        side_effect=lambda ox, oz, size: {
+            "origin_x": ox,
+            "origin_z": oz,
+            "width": size,
+            "height": size,
+            "pixels": "AAAA",
+            "coverage": 0.9,
+        }
+    )
+    env._bridges["a"] = bridge
+    env._home_xz = (0, 0)
+    env._obs_cache = {
+        "a": MinecraftObservation(
+            agent_id="a",
+            tick=0,
+            position=Vec3(x=1, y=70, z=2),
+            current_goal="g",
+        )
+    }
+
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+    # Don't spawn real Mineflayer scouts in unit tests.
+    env._spawn_map_scouts = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+    async def fake_tp(username: str, br: Any, x: float, y: float, z: float) -> None:
+        await br.configure_presence(x=x, y=y, z=z)
+
+    env._teleport_bot = fake_tp  # type: ignore[method-assign]
+
+    progress: list[tuple[int, int]] = []
+
+    async def on_tile(_tile: dict, cur: int, tot: int) -> None:
+        progress.append((cur, tot))
+
+    result = await env.preload_map_region(
+        0, 200, 0, 200, settle_seconds=0.01, workers=1, use_agents=True, on_tile=on_tile
+    )
+    assert result["ok"] is True
+    assert result["scanned"] == 4  # 0 and 128 in each axis
+    assert result["workers"] == 1
+    assert result["pan_limit"] >= 200
+    assert progress[-1] == (4, 4)
+    assert bridge.configure_presence.await_count >= 5  # 4 tiles + restore
+    assert bridge.get_map.await_count >= 4
+
+    with pytest.raises(ValueError, match="tiles"):
+        await env.preload_map_region(0, 5000, 0, 5000, max_tiles=4, workers=1, use_agents=True)
+
+    empty = MinecraftEnvironment()
+    with pytest.raises(RuntimeError, match="No bots"):
+        await empty.preload_map_region(0, 10, 0, 10)
+
+
+async def test_preload_map_region_parallel_workers(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = MinecraftEnvironment(map_pan_limit=128)
+    env.add_bot("a", username="Alex")
+    env.add_bot("b", username="Bob")
+    bridges = []
+    for aid in ("a", "b"):
+        bridge = AsyncMock()
+        bridge.configure_presence = AsyncMock(return_value={"ok": True})
+        bridge.get_map = AsyncMock(
+            side_effect=lambda ox, oz, size: {
+                "origin_x": ox,
+                "origin_z": oz,
+                "width": size,
+                "height": size,
+                "pixels": "AAAA",
+                "coverage": 0.9,
+            }
+        )
+        env._bridges[aid] = bridge
+        bridges.append(bridge)
+    env._home_xz = (0, 0)
+    env._obs_cache = {
+        "a": MinecraftObservation(agent_id="a", tick=0, position=Vec3(x=0, y=70, z=0)),
+        "b": MinecraftObservation(agent_id="b", tick=0, position=Vec3(x=1, y=70, z=1)),
+    }
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+    env._spawn_map_scouts = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    env._teleport_bot = AsyncMock()  # type: ignore[method-assign]
+
+    result = await env.preload_map_region(
+        0, 200, 0, 200, settle_seconds=0.01, workers=8, use_agents=True
+    )
+    assert result["ok"] is True
+    assert result["scanned"] == 4
+    assert result["workers"] == 2
+    assert result["scouts"] == 0
+    assert bridges[0].get_map.await_count + bridges[1].get_map.await_count >= 4
 
 
 async def test_refresh_map_skip_and_fail() -> None:
@@ -143,14 +271,15 @@ async def test_refresh_map_skip_and_fail() -> None:
     env._obs_cache = {
         "a": MinecraftObservation(agent_id="a", tick=0, position=Vec3(x=0, y=64, z=0))
     }
+    # Agent at (0,0) with tile size 128 → origin (-128, -128). Same origin → skip.
     env._map_cache = {"width": 128}
-    env._map_origin = (-64, -64)
+    env._map_origin = (-128, -128)
     env._home_xz = (0, 0)
-    env._tick_count = 1  # not divisible by 3 → skip
     await env._refresh_map()
     bridge.get_map.assert_not_called()
 
-    env._tick_count = 3
+    # Different cached origin → scan; failures are logged, not raised.
+    env._map_origin = (0, 0)
     env.fetch_map = AsyncMock(side_effect=RuntimeError("scan fail"))  # type: ignore[method-assign]
     await env._refresh_map()
 
@@ -228,8 +357,31 @@ async def test_connect_one_and_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(MinecraftEnvironment, "_connect_one", boom)
     monkeypatch.setattr(MinecraftEnvironment, "despawn_bot", AsyncMock())
+    monkeypatch.setattr(MinecraftEnvironment, "_protect_agents_for_join", AsyncMock())
     with pytest.raises(RuntimeError):
         await env2.spawn_bot("z", username="Zed")
+
+
+async def test_recover_bot_after_respawn() -> None:
+    env = MinecraftEnvironment()
+    env.add_bot("a", username="Alex", spawn_x=0, spawn_y=64, spawn_z=0)
+    bridge = AsyncMock()
+    bridge.perform_action = AsyncMock(return_value={"ok": True})
+    env._bridges["a"] = bridge
+    env._obs_cache = {
+        "a": MinecraftObservation(
+            agent_id="a",
+            tick=0,
+            position=Vec3(x=50, y=70, z=60),
+        )
+    }
+    env._teleport_bot = AsyncMock()  # type: ignore[method-assign]
+    await env._recover_bot_after_respawn("a")
+    env._teleport_bot.assert_awaited()
+    args = env._teleport_bot.await_args
+    assert args.args[0] == "Alex"
+    assert args.args[2:] == (50, 70, 60)
+    bridge.perform_action.assert_awaited()
 
 
 async def test_prepare_tick_and_close() -> None:

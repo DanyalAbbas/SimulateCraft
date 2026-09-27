@@ -52,7 +52,10 @@ class StubEnvironment(Environment):
         self.positions.setdefault(agent_id, [0.0, 0.0, 0.0])
 
     async def spawn_bot(self, agent_id: str, **kwargs: Any) -> None:
-        if agent_id in self._registered:
+        # Runner.add_agent may already have registered the id (create_agent does
+        # that before awaiting spawn). Mirror MinecraftEnvironment: only reject
+        # a second *spawn*, not a prior runner registration.
+        if agent_id in self.bot_meta:
             raise ValueError(f"agent {agent_id!r} already registered")
         self.register_agent(agent_id)
         x = kwargs.get("spawn_x")

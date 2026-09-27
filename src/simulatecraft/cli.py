@@ -91,9 +91,106 @@ def _minecraft_logs_ready(docker: str, container: str = "simulatecraft-mc") -> b
     return "Done (" in text or "RCON running on" in text
 
 
-def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
+def _existing_world_dir() -> Path | None:
+    world = REPO_ROOT / "data" / "minecraft" / "world"
+    if (world / "level.dat").is_file():
+        return world
+    return None
+
+
+def _prompt_line(message: str, default: str = "") -> str:
+    suffix = f" [{default}]" if default else ""
+    try:
+        raw = input(f"{message}{suffix}: ").strip()
+    except EOFError:
+        return default
+    return raw or default
+
+
+def _configure_world(
+    *,
+    world_mode: str | None = None,
+    import_path: str | None = None,
+    seed: int | None = None,
+) -> None:
+    """Ask (or use flags) whether to import a world or generate a random one.
+
+    ``world_mode``: ``import`` | ``random`` | ``keep`` | None (interactive).
+    """
+    from simulatecraft.minecraft.world_settings import (
+        import_world_folder,
+        import_world_zip,
+        prepare_random_world,
+    )
+
+    existing = _existing_world_dir()
+    mode = (world_mode or "").strip().lower() or None
+
+    if mode is None:
+        if not sys.stdin.isatty():
+            mode = "keep" if existing else "random"
+        else:
+            print("\n=== World setup ===")
+            if existing:
+                print(f"Found existing world at {existing}")
+                print("  [1] Keep existing world")
+                print("  [2] Import a Minecraft world (.zip or folder)")
+                print("  [3] Generate a new random world")
+                choice = _prompt_line("Choice", "1")
+                mode = {"1": "keep", "2": "import", "3": "random"}.get(choice, "keep")
+            else:
+                print("No world yet. Import a custom world, or generate a random one.")
+                print("  [1] Import a Minecraft world (.zip or folder)")
+                print("  [2] Generate a new random world")
+                choice = _prompt_line("Choice", "2")
+                mode = {"1": "import", "2": "random"}.get(choice, "random")
+
+    if mode == "keep":
+        if not existing:
+            print("No existing world to keep — generating a random one.")
+            mode = "random"
+        else:
+            print(f"Keeping world at {existing}")
+            return
+
+    if mode == "import":
+        path_str = (import_path or "").strip()
+        if not path_str:
+            if not sys.stdin.isatty():
+                sys.exit("`--world import` requires `--import-world /path/to/world.zip`")
+            path_str = _prompt_line("Path to world .zip or folder")
+        if not path_str:
+            sys.exit("No import path given.")
+        path = Path(path_str).expanduser().resolve()
+        if path.is_file() and path.suffix.lower() == ".zip":
+            settings = import_world_zip(path, label=path.stem)
+        elif path.is_dir():
+            settings = import_world_folder(path, label=path.name)
+        else:
+            sys.exit(f"Not a .zip or world folder: {path}")
+        print(f"Imported world: {settings.world.label}")
+        os.environ.pop("SEED", None)
+        return
+
+    # random
+    settings, chosen = prepare_random_world(seed=seed)
+    os.environ["SEED"] = str(chosen)
+    print(f"Random world ready (seed {chosen}). Minecraft will generate it on first boot.")
+    _ = settings
+
+
+def ensure_minecraft(
+    *,
+    skip: bool,
+    host: str,
+    port: int,
+    world_mode: str | None = None,
+    import_path: str | None = None,
+    seed: int | None = None,
+) -> None:
     if skip:
         print(f"Skipping Docker; expecting a server at {host}:{port}")
+        _try_apply_world_rules()
         return
     docker = _need(
         "docker",
@@ -102,9 +199,11 @@ def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
     )
     if _port_open(host, port):
         print(f"Minecraft already listening on {host}:{port}")
+        print("(World setup skipped — stop the server to import or regenerate a world.)")
     else:
         if not COMPOSE_FILE.exists():
             sys.exit(f"Missing {COMPOSE_FILE}")
+        _configure_world(world_mode=world_mode, import_path=import_path, seed=seed)
         print("Starting Minecraft 1.21.4 (offline mode) via Docker…")
         _run([docker, "compose", "-f", str(COMPOSE_FILE), "up", "-d"])
 
@@ -116,6 +215,7 @@ def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
         if ready:
             time.sleep(2)
             print("Minecraft is up.")
+            _try_apply_world_rules()
             return
         time.sleep(2)
     sys.exit(
@@ -123,6 +223,16 @@ def ensure_minecraft(*, skip: bool, host: str, port: int) -> None:
         "Check: docker compose logs -f\n"
         'Look for a line like: Done (…)! For help, type "help"'
     )
+
+
+def _try_apply_world_rules() -> None:
+    try:
+        from simulatecraft.minecraft.world_settings import apply_rules_via_rcon
+
+        apply_rules_via_rcon()
+        print("Applied world rules from data/world_settings.json (if any).")
+    except Exception as exc:
+        print(f"Note: could not apply world rules yet ({exc})")
 
 
 def _env_set(name: str) -> bool:
@@ -144,7 +254,7 @@ def require_llm_key() -> None:
             "For 9Router / your own API, set all three in `.env`:\n"
             "  OPENAI_BASE_URL=http://localhost:20128/v1\n"
             "  OPENAI_API_KEY=<key>\n"
-            "  SIMULATECRAFT_MODEL=oc/mimo-v2.5-free\n\n"
+            "  SIMULATECRAFT_MODEL=oc/space-bunny-free\n\n"
             "Docs: https://danyalabbas.github.io/SimulateCraft/llm-providers/\n"
         )
     sys.exit(
@@ -157,7 +267,7 @@ def require_llm_key() -> None:
         "  9Router / your own OpenAI-compatible API:\n"
         "    OPENAI_BASE_URL=http://localhost:20128/v1\n"
         "    OPENAI_API_KEY=<key>\n"
-        "    SIMULATECRAFT_MODEL=oc/mimo-v2.5-free\n\n"
+        "    SIMULATECRAFT_MODEL=oc/space-bunny-free\n\n"
         "  Groq (quick try only — rate-limits fast under agent load):\n"
         "    GROQ_API_KEY=gsk_...\n\n"
         "Then run again:\n"
@@ -176,6 +286,15 @@ def launch_example(args: argparse.Namespace) -> None:
 
     model = args.model or resolve_model()
     print(f"Starting agents  [model: {model}]")
+    radius = int(getattr(args, "map_radius", 512) or 512)
+    if radius > 8192:
+        print(f"Note: --map-radius {radius} capped to 8192 (viewer scan limit).")
+        args.map_radius = 8192
+    elif radius > 2048:
+        print(
+            f"Note: --map-radius {radius} only widens how far you can pan; "
+            "it does not zoom out or preload the whole area. Prefer ≤2048."
+        )
     asyncio.run(
         run_with_server(
             args.host,
@@ -188,6 +307,7 @@ def launch_example(args: argparse.Namespace) -> None:
             args.viewer_port,
             args.log,
             args.mc_version,
+            map_radius=args.map_radius,
         )
     )
 
@@ -199,12 +319,37 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--setup-only", action="store_true", help="Install Node bot deps and exit")
     parser.add_argument("--no-docker", action="store_true", help="Do not start Docker Minecraft")
+    parser.add_argument(
+        "--world",
+        choices=("import", "random", "keep"),
+        default=None,
+        help="World setup without a prompt: import | random | keep existing",
+    )
+    parser.add_argument(
+        "--import-world",
+        default=None,
+        metavar="PATH",
+        help="Path to a .zip or Java world folder (implies --world import)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for --world random (default: random)",
+    )
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=25565)
     parser.add_argument("--agents", nargs="+", default=["explorer"])
     parser.add_argument("--model", default=None)
     parser.add_argument("--ticks", type=int, default=10_000)
     parser.add_argument("--tick-rate", type=float, default=1.0)
+    parser.add_argument(
+        "--map-radius",
+        type=int,
+        default=512,
+        metavar="BLOCKS",
+        help="Live viewer map half-side in blocks around spawn (default 512)",
+    )
     parser.add_argument("--viewer-host", default="127.0.0.1")
     parser.add_argument("--viewer-port", type=int, default=8000)
     parser.add_argument("--log", default="events.jsonl")
@@ -216,7 +361,17 @@ def main(argv: list[str] | None = None) -> None:
         print("Setup complete.")
         return
     require_llm_key()
-    ensure_minecraft(skip=args.no_docker, host=args.host, port=args.port)
+    world_mode = args.world
+    if args.import_world and not world_mode:
+        world_mode = "import"
+    ensure_minecraft(
+        skip=args.no_docker,
+        host=args.host,
+        port=args.port,
+        world_mode=world_mode,
+        import_path=args.import_world,
+        seed=args.seed,
+    )
     print(f"\nViewer will be at http://{args.viewer_host}:{args.viewer_port}\n")
     launch_example(args)
 

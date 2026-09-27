@@ -121,6 +121,46 @@ def test_list_agents(client: TestClient) -> None:
     assert "alice" in body["agents"]
 
 
+def test_generate_prompt_endpoint(client: TestClient) -> None:
+    res = client.post(
+        "/api/agents/generate-prompt",
+        json={"text": "careful builder", "name": "Bea", "use_llm": False},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["source"] == "template"
+    assert "Bea" in body["persona"]
+    assert "careful builder" in body["persona"]
+
+
+def test_agent_workshop_endpoints(client: TestClient) -> None:
+    got = client.get("/api/agents/workshop")
+    assert got.status_code == 200
+    body = got.json()
+    assert "prompt_generator_instructions" in body
+    assert "roster_columns" in body
+    assert body["expected_headers"]
+
+    body["prompt_generator_instructions"] = "Always write haiku personas."
+    saved = client.put("/api/agents/workshop", json=body)
+    assert saved.status_code == 200
+    assert "haiku" in saved.json()["prompt_generator_instructions"]
+
+    preset = client.post("/api/agents/workshop/preset/minimal")
+    assert preset.status_code == 200
+    assert preset.json()["roster_preset"] == "minimal"
+    # Switching presets keeps the custom generator instructions.
+    assert "haiku" in preset.json()["prompt_generator_instructions"]
+
+
+def test_bulk_agents_parse_error(client: TestClient) -> None:
+    res = client.post(
+        "/api/agents/bulk",
+        files={"file": ("bad.csv", b"Role,Department\nx,y\n", "text/csv")},
+    )
+    assert res.status_code == 400
+
+
 def test_watcher_role_endpoint(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from simulatecraft.server.roles import WatcherRoleResponse
 

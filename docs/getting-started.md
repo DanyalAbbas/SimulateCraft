@@ -25,18 +25,6 @@ Prefer **OpenRouter**, **9Router**, or your own API. Groq works for a smoke test
 irm https://raw.githubusercontent.com/DanyalAbbas/SimulateCraft/main/install.ps1 | iex
 ```
 
-If that URL fails (occasional raw.githubusercontent.com 503):
-
-```powershell
-irm https://cdn.jsdelivr.net/gh/DanyalAbbas/SimulateCraft@main/install.ps1 | iex
-```
-
-If PowerShell blocks scripts later, use `run.cmd`, or once:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
 ### macOS / Linux
 
 ```bash
@@ -89,7 +77,7 @@ or for 9Router / your own API:
 ```text
 OPENAI_BASE_URL=http://localhost:20128/v1
 OPENAI_API_KEY=...
-SIMULATECRAFT_MODEL=oc/mimo-v2.5-free
+SIMULATECRAFT_MODEL=oc/space-bunny-free
 ```
 
 | OS | How |
@@ -120,9 +108,10 @@ The launcher will:
 
 1. Install `uv` if needed, then Python packages  
 2. Install the Mineflayer bot (`npm`)  
-3. Start a local offline Minecraft server (Docker), unless you pass `--no-docker`  
-4. Wait until the world is ready  
-5. Start the explorer agent and the web viewer  
+3. Ask whether to **import** a Minecraft world or **generate a random** one  
+4. Start a local offline Minecraft server (Docker), unless you pass `--no-docker`  
+5. Wait until the world is ready  
+6. Start the explorer agent and the web viewer  
 
 ### 4. Open the viewer and join Minecraft
 
@@ -147,6 +136,10 @@ Bundled Docker pins **1.21.4** and offline mode (easy for bots). Online-mode ser
 
 ```text
 --no-docker
+--world import|random|keep
+--import-world /path/to/world.zip
+--seed 12345
+--map-radius 1024
 --host / --port
 --agents explorer builder
 --model openrouter:meta-llama/llama-3.1-8b-instruct:free
@@ -167,4 +160,4 @@ Bundled Docker pins **1.21.4** and offline mode (easy for bots). Online-mode ser
 | Wrong MC version | Use 1.21.4, or pass `--mc-version` to match your server |
 | Viewer blank | Keep the terminal open; open `http://127.0.0.1:8000` |
 
-Next: [Connect an LLM](llm-providers.md) · [Use the live viewer](viewer.md)
+Next: [Connect an LLM](llm-providers.md) · [Use the live viewer](viewer/index.md)
